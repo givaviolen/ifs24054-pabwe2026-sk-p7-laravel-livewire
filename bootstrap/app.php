@@ -16,6 +16,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\EnsureRole::class,
             'owns.stock' => \App\Http\Middleware\EnsureStockOwnership::class,
         ]);
+
+        // User yang sudah login yang membuka halaman guest (/, /login, /register)
+        // diarahkan ke dashboard sesuai role.
+        $middleware->redirectUsersTo(fn (Request $request) => $request->user()?->isAdmin()
+            ? route('admin.users')
+            : route('stocks.index'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
