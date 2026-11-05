@@ -18,8 +18,17 @@ if (Test-Path $Target) {
 }
 
 Write-Host "== Membuat kerangka Laravel 13 ==" -ForegroundColor Cyan
-composer create-project laravel/laravel "^13.0" $Target
-if ($LASTEXITCODE -ne 0) { throw "composer create-project gagal." }
+# Jalankan Composer dari folder induk dengan nama folder relatif tanpa spasi.
+# Ini menghindari masalah parsing argumen native command pada Windows PowerShell 5.1.
+$ParentDirectory = Split-Path $Source -Parent
+Push-Location $ParentDirectory
+try {
+    composer create-project laravel/laravel $ProjectName "13.*"
+    if ($LASTEXITCODE -ne 0) { throw "composer create-project gagal." }
+}
+finally {
+    Pop-Location
+}
 
 Push-Location $Target
 try {
