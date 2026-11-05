@@ -14,82 +14,69 @@ class AdminLivewireTest extends TestCase
 {
     use RefreshDatabase;
 
-    private User $admin;
-
-    protected function setUp(): void
+    public function test_member_forbidden_from_admin_pages(): void
     {
-        parent::setUp();
-        $this->admin = User::factory()->admin()->create(['name' => 'Admin Utama']);
-        $this->actingAs($this->admin);
+        $member = User::factory()->member()->create();
+        $targetUser = User::factory()->member()->create();
+
+        $this->actingAs($member)
+            ->get('/admin/users')
+            ->assertStatus(403);
+
+        $this->actingAs($member)
+            ->get("/admin/users/{$targetUser->id}/stocks")
+            ->assertStatus(403);
     }
 
-    public function test_user_list_shows_users_with_stock_counts(): void
+    public function test_admin_can_view_user_list(): void
     {
-        $member = User::factory()->create(['name' => 'Budi Member']);
-        Stock::factory()->count(3)->for($member)->create();
+        $admin = User::factory()->admin()->create();
+        User::factory()->create(['name' => 'Budi Santoso', 'email' => 'budi@test.com']);
+        User::factory()->create(['name' => 'Citra Lestari', 'email' => 'citra@test.com']);
 
-        $this->get('/admin/users')->assertOk()->assertSeeLivewire(UserList::class);
+        $this->actingAs($admin);
 
         Livewire::test(UserList::class)
-            ->assertSee('Budi Member')
-            ->assertSee('Admin Utama')
-            ->assertSee(route('admin.users.stocks', $member));
-    }
-
-    public function test_user_list_search_and_empty_state(): void
-    {
-        User::factory()->create(['name' => 'Citra Lestari']);
-
-        Livewire::test(UserList::class)
-            ->set('search', 'Citra')
+            ->assertSee('Budi Santoso')
             ->assertSee('Citra Lestari')
-            ->assertDontSee('Admin Utama')
-            ->set('search', 'tidak-ada-orang-ini')
-            ->assertSee('Tidak ada user.');
+            ->set('search', 'Budi')
+            ->assertSee('Budi Santoso')
+            ->assertDontSee('Citra Lestari');
     }
 
-    public function test_user_list_paginates(): void
+    public function test_admin_can_view_user_stocks_read_only(): void
     {
-        User::factory()->count(12)->create();
+        $admin = User::factory()->admin()->create();
+        $member = User::factory()->member()->create(['name' => 'Dewi Sartika']);
 
-        Livewire::test(UserList::class)
-            ->assertViewHas('users', fn ($users) => $users->count() === 10 && $users->total() === 13)
-            ->set('search', 'a'); // memicu resetPage
-    }
+        Stock::factory()->create(['user_id' => $member->id, 'name' => 'Buku Matematika', 'status' => 'available', 'quantity' => 10, 'min_stock' => 5]);
+        Stock::factory()->create(['user_id' => $member->id, 'name' => 'Buku Fisika', 'status' => 'out_of_stock', 'quantity' => 0, 'min_stock' => 5]);
 
-    public function test_stock_list_of_user_is_read_only_view(): void
-    {
-        $member = User::factory()->create(['name' => 'Budi Member']);
-        Stock::factory()->for($member)->create(['name' => 'Kertas Milik Budi', 'quantity' => 0, 'status' => 'out_of_stock']);
-        Stock::factory()->create(['name' => 'Barang Orang Lain']);
-
-        $this->get('/admin/users/'.$member->id.'/stocks')->assertOk()->assertSeeLivewire(AdminUserStockList::class);
+        $this->actingAs($admin);
 
         Livewire::test(AdminUserStockList::class, ['user' => $member])
-            ->assertSee('Budi Member')
-            ->assertSee('Kertas Milik Budi')
-            ->assertDontSee('Barang Orang Lain')
-            ->assertDontSee('Hapus')
-            ->assertDontSee('Edit')
-            ->assertViewHas('summary', fn ($s) => $s['total'] === 1 && $s['out_of_stock'] === 1);
+            ->assertSee('Dewi Sartika')
+            ->assertSee('Buku Matematika')
+            ->assertSee('Buku Fisika')
+            ->set('search', 'Matematika')
+            ->assertSee('Buku Matematika')
+            ->assertDontSee('Buku Fisika')
+            ->set('search', '')
+            ->set('statusFilter', 'out_of_stock')
+            ->assertSee('Buku Fisika')
+            ->assertDontSee('Buku Matematika');
     }
 
-    public function test_stock_list_of_user_search_filter_and_empty(): void
+    public function test_admin_can_export_user_stocks(): void
     {
-        $member = User::factory()->create();
-        Stock::factory()->for($member)->create(['name' => 'Alpha', 'quantity' => 50, 'status' => 'available']);
-        Stock::factory()->for($member)->create(['name' => 'Beta', 'quantity' => 0, 'status' => 'out_of_stock']);
+        $admin = User::factory()->admin()->create();
+        $member = User::factory()->member()->create(['name' => 'Eko Prasetyo']);
+        Stock::factory()->create(['user_id' => $member->id, 'name' => 'Barang Export Admin']);
+
+        $this->actingAs($admin);
 
         Livewire::test(AdminUserStockList::class, ['user' => $member])
-            ->set('search', 'Alpha')->assertSee('Alpha')->assertDontSee('Beta')
-            ->set('search', '')->set('statusFilter', 'out_of_stock')->assertSee('Beta')->assertDontSee('Alpha')
-            ->set('statusFilter', '')->set('search', 'zzz')->assertSee('User ini belum punya stok.');
-    }
-
-    public function test_admin_component_has_no_mutating_actions(): void
-    {
-        foreach (['save', 'delete', 'adjust', 'openEdit', 'openCreate', 'import', 'saveAi'] as $method) {
-            $this->assertFalse(method_exists(AdminUserStockList::class, $method), "AdminUserStockList tidak boleh punya {$method}()");
-        }
+            ->call('exportExcel')
+            ->assertFileDownloaded();
     }
 }

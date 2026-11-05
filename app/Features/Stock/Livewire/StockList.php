@@ -7,291 +7,291 @@ use App\Features\Stock\Enums\StockStatus;
 use App\Features\Stock\Models\Stock;
 use App\Features\Stock\Services\StockExcelService;
 use App\Features\Stock\Services\StockService;
-use InvalidArgumentException;
+use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Layout;
-use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
-use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
-use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 #[Layout('components.layouts.app')]
-#[Title('Stok Barang')]
+#[Title('Daftar Stok - StockApp')]
 class StockList extends Component
 {
-    use WithFileUploads;
-    use WithPagination;
+    use WithPagination, WithFileUploads;
 
-    #[Url(as: 'q')]
+    // Filters
     public string $search = '';
-
-    #[Url(as: 'status')]
     public string $statusFilter = '';
 
-    // Form create/edit (modal)
-    public bool $showForm = false;
+    // Create / Edit Modal State
+    public bool $showFormModal = false;
+    public ?int $editingStockId = null;
+    public string $formName = '';
+    public ?string $formSku = null;
+    public ?string $formDescription = null;
+    public int $formQuantity = 0;
+    public string $formUnit = 'pcs';
+    public ?float $formPrice = null;
+    public int $formMinStock = 5;
+    public string $formStatus = 'available';
 
-    #[Locked]
-    public ?int $editingId = null;
+    // Delete Confirmation Modal State
+    public ?int $confirmingStockDeletionId = null;
 
-    public $name = '';
+    // Excel Import State
+    public bool $showImportModal = false;
+    public mixed $importFile = null;
 
-    public $sku = '';
-
-    public $description = '';
-
-    public $quantity = 0;
-
-    public $unit = 'pcs';
-
-    public $price = null;
-
-    public $min_stock = 5;
-
-    // Hapus
-    #[Locked]
-    public ?int $confirmDeleteId = null;
-
-    // Import Excel
-    public bool $showImport = false;
-
-    public $importFile = null;
-
-    // Generator AI
-    public bool $showAi = false;
-
+    // AI Generator State
+    public bool $showAiModal = false;
     public string $aiPrompt = '';
+    public int $aiCount = 3;
+    public array $aiGeneratedItems = [];
+    public array $aiSelectedIndices = [];
+    public bool $aiIsGenerating = false;
+    public ?string $aiErrorMessage = null;
 
-    public $aiCount = 5;
+    protected $queryString = [
+        'search' => ['except' => ''],
+        'statusFilter' => ['except' => ''],
+    ];
 
-    #[Locked]
-    public array $aiItems = [];
-
-    public array $aiSelected = [];
-
-    public function mount(): void
-    {
-        $this->authorize('viewAny', Stock::class);
-    }
-
-    public function updatingSearch(): void
+    public function updatedSearch(): void
     {
         $this->resetPage();
     }
 
-    public function updatingStatusFilter(): void
+    public function updatedStatusFilter(): void
     {
         $this->resetPage();
     }
 
-    /* ---------- CRUD ---------- */
+    // --- CRUD Operations ---
 
-    public function openCreate(): void
+    public function openCreateModal(): void
     {
-        $this->authorize('create', Stock::class);
         $this->resetForm();
-        $this->showForm = true;
+        $this->showFormModal = true;
     }
 
-    public function openEdit(int $id): void
+    public function openEditModal(int $id): void
     {
-        $stock = $this->ownedStock($id);
+        $stock = Stock::findOrFail($id);
+        Gate::authorize('update', $stock);
 
-        $this->resetForm();
-        $this->editingId = $stock->id;
-        $this->name = $stock->name;
-        $this->sku = $stock->sku;
-        $this->description = $stock->description;
-        $this->quantity = $stock->quantity;
-        $this->unit = $stock->unit;
-        $this->price = $stock->price;
-        $this->min_stock = $stock->min_stock;
-        $this->showForm = true;
+        $this->resetErrorBag();
+        $this->editingStockId = $stock->id;
+        $this->formName = $stock->name;
+        $this->formSku = $stock->sku;
+        $this->formDescription = $stock->description;
+        $this->formQuantity = $stock->quantity;
+        $this->formUnit = $stock->unit;
+        $this->formPrice = $stock->price !== null ? (float) $stock->price : null;
+        $this->formMinStock = $stock->min_stock;
+        $this->formStatus = $stock->status;
+        $this->showFormModal = true;
     }
 
-    public function save(): void
+    public function closeFormModal(): void
     {
-        $data = $this->validate(StockService::rules());
+        $this->showFormModal = false;
+    }
 
-        if ($this->editingId !== null) {
-            $stock = $this->ownedStock($this->editingId);
-            $this->service()->update($stock, $data);
-            session()->flash('status', 'Stok berhasil diperbarui.');
+    public function resetForm(): void
+    {
+        $this->reset(['editingStockId', 'formName', 'formSku', 'formDescription', 'formPrice']);
+        $this->formQuantity = 0;
+        $this->formUnit = 'pcs';
+        $this->formMinStock = 5;
+        $this->formStatus = StockStatus::AVAILABLE->value;
+        $this->resetErrorBag();
+    }
+
+    public function saveStock(StockService $stockService): void
+    {
+        $this->validate([
+            'formName' => ['required', 'string', 'max:255'],
+            'formSku' => ['nullable', 'string', 'max:100'],
+            'formDescription' => ['nullable', 'string'],
+            'formQuantity' => ['required', 'integer', 'min:0'],
+            'formUnit' => ['required', 'string', 'max:50'],
+            'formPrice' => ['nullable', 'numeric', 'min:0'],
+            'formMinStock' => ['required', 'integer', 'min:0'],
+            'formStatus' => ['required', 'in:available,low_stock,out_of_stock'],
+        ]);
+
+        $data = [
+            'name' => $this->formName,
+            'sku' => $this->formSku ?: null,
+            'description' => $this->formDescription ?: null,
+            'quantity' => $this->formQuantity,
+            'unit' => $this->formUnit,
+            'price' => $this->formPrice,
+            'min_stock' => $this->formMinStock,
+            'status' => $this->formStatus,
+        ];
+
+        if ($this->editingStockId) {
+            $stock = Stock::findOrFail($this->editingStockId);
+            Gate::authorize('update', $stock);
+            $stockService->updateStock($stock, $data);
+            session()->flash('success', 'Stok berhasil diperbarui.');
         } else {
-            $this->authorize('create', Stock::class);
-            $this->service()->create(auth()->user(), $data);
-            session()->flash('status', 'Stok berhasil ditambahkan.');
+            $stockService->createStock(Auth::id(), $data);
+            session()->flash('success', 'Stok baru berhasil ditambahkan.');
         }
 
-        $this->closeForm();
+        $this->closeFormModal();
     }
 
-    public function closeForm(): void
+    public function adjustQuantity(int $id, int $adjustment, StockService $stockService): void
     {
-        $this->resetForm();
-        $this->showForm = false;
+        $stock = Stock::findOrFail($id);
+        Gate::authorize('update', $stock);
+
+        $stockService->adjustQuantity($stock, $adjustment);
     }
 
     public function confirmDelete(int $id): void
     {
-        $this->confirmDeleteId = $this->ownedStock($id)->id;
+        $this->confirmingStockDeletionId = $id;
     }
 
     public function cancelDelete(): void
     {
-        $this->confirmDeleteId = null;
+        $this->confirmingStockDeletionId = null;
     }
 
-    public function delete(): void
+    public function deleteStock(?int $id = null, ?StockService $stockService = null): void
     {
-        $stock = $this->ownedStock((int) $this->confirmDeleteId);
-        $this->service()->delete($stock);
-        $this->confirmDeleteId = null;
-        session()->flash('status', 'Stok berhasil dihapus.');
-    }
+        $stockService = $stockService ?? app(StockService::class);
+        $targetId = $id ?? $this->confirmingStockDeletionId;
 
-    /** Tambah/kurangi quantity; status ikut disesuaikan. */
-    public function adjust(int $id, int $delta): void
-    {
-        $this->service()->adjustQuantity($this->ownedStock($id), $delta);
-    }
+        if ($targetId) {
+            $stock = Stock::findOrFail($targetId);
+            Gate::authorize('delete', $stock);
 
-    /* ---------- Excel ---------- */
-
-    public function exportExcel(StockExcelService $excel)
-    {
-        $this->authorize('viewAny', Stock::class);
-
-        $content = $excel->export($this->service()->allForUser(auth()->id()));
-
-        return response()->streamDownload(function () use ($content) {
-            echo $content;
-        }, 'stok-'.now()->format('Ymd-His').'.xlsx');
-    }
-
-    public function openImport(): void
-    {
-        $this->authorize('create', Stock::class);
-        $this->reset('importFile');
-        $this->resetErrorBag();
-        $this->showImport = true;
-    }
-
-    public function closeImport(): void
-    {
-        $this->reset('importFile', 'showImport');
-    }
-
-    public function import(StockExcelService $excel): void
-    {
-        $this->authorize('create', Stock::class);
-        $this->validate(['importFile' => ['required', 'file', 'extensions:xlsx', 'max:2048']]);
-
-        try {
-            $result = $excel->import(auth()->user(), $this->importFile->getRealPath());
-        } catch (InvalidArgumentException $e) {
-            $this->addError('importFile', $e->getMessage());
-
-            return;
+            $stockService->deleteStock($stock);
+            $this->confirmingStockDeletionId = null;
+            session()->flash('success', 'Stok berhasil dihapus.');
         }
-
-        $this->resetPage();
-        $this->closeImport();
-        session()->flash('status', "Import selesai: {$result['imported']} baris masuk, {$result['skipped']} dilewati.");
     }
 
-    /* ---------- AI ---------- */
+    // --- Excel Export & Import ---
 
-    public function openAi(): void
+    public function exportExcel(StockExcelService $excelService): StreamedResponse
     {
-        $this->authorize('create', Stock::class);
-        $this->reset('aiPrompt', 'aiItems', 'aiSelected');
-        $this->resetErrorBag();
-        $this->showAi = true;
+        $userId = Auth::id();
+        $user = Auth::user();
+        $stocks = $user ? $user->stocks()->latest('id')->get() : collect();
+
+        return $excelService->exportToResponse($stocks, 'stocks-'.now()->format('Ymd-His').'.xlsx');
     }
 
-    public function closeAi(): void
+    public function openImportModal(): void
     {
-        $this->reset('showAi', 'aiPrompt', 'aiItems', 'aiSelected');
+        $this->reset(['importFile']);
+        $this->showImportModal = true;
     }
 
-    public function generateAi(AiClientInterface $ai): void
+    public function closeImportModal(): void
     {
-        $this->authorize('create', Stock::class);
+        $this->showImportModal = false;
+    }
+
+    public function importExcel(StockExcelService $excelService): void
+    {
+        $this->validate([
+            'importFile' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+        ]);
+
+        $path = $this->importFile->getRealPath();
+        $result = $excelService->import($path, Auth::id());
+
+        $this->closeImportModal();
+        session()->flash('success', "Berhasil mengimpor {$result['imported']} item stok.");
+    }
+
+    // --- AI Stock Generator ---
+
+    public function openAiModal(): void
+    {
+        $this->reset(['aiPrompt', 'aiGeneratedItems', 'aiSelectedIndices', 'aiErrorMessage', 'aiIsGenerating']);
+        $this->aiCount = 3;
+        $this->showAiModal = true;
+    }
+
+    public function closeAiModal(): void
+    {
+        $this->showAiModal = false;
+    }
+
+    public function generateWithAi(AiClientInterface $aiClient): void
+    {
         $this->validate([
             'aiPrompt' => ['required', 'string', 'min:3', 'max:500'],
-            'aiCount' => ['required', 'integer', 'min:1', 'max:10'],
+            'aiCount' => ['required', 'integer', 'min:1'],
         ]);
+
+        $this->aiIsGenerating = true;
+        $this->aiErrorMessage = null;
 
         try {
-            $items = $ai->generate($this->aiPrompt, (int) $this->aiCount);
-        } catch (RuntimeException $e) {
-            $this->addError('aiPrompt', $e->getMessage());
-
-            return;
+            $items = $aiClient->generateStocks($this->aiPrompt, $this->aiCount);
+            $this->aiGeneratedItems = array_map(fn ($item) => $item->toArray(), $items);
+            $this->aiSelectedIndices = array_keys($this->aiGeneratedItems);
+        } catch (\Throwable $e) {
+            $this->aiErrorMessage = $e->getMessage();
+        } finally {
+            $this->aiIsGenerating = false;
         }
-
-        if ($items === []) {
-            $this->addError('aiPrompt', 'AI tidak menghasilkan item. Coba perjelas deskripsi.');
-
-            return;
-        }
-
-        $this->aiItems = array_map(fn ($item) => $item->toArray(), $items);
-        $this->aiSelected = array_map('strval', array_keys($this->aiItems));
     }
 
-    public function saveAi(): void
+    public function saveAiGenerated(StockService $stockService): void
     {
-        $this->authorize('create', Stock::class);
-
-        $chosen = array_intersect_key($this->aiItems, array_flip($this->aiSelected));
-
-        if ($chosen === []) {
-            $this->addError('aiSelected', 'Pilih minimal satu item untuk disimpan.');
-
+        if (empty($this->aiSelectedIndices) || empty($this->aiGeneratedItems)) {
+            $this->aiErrorMessage = 'Pilih minimal satu item stok yang ingin disimpan.';
             return;
         }
 
-        $count = $this->service()->createMany(auth()->user(), $chosen);
-        $this->closeAi();
-        $this->resetPage();
-        session()->flash('status', "{$count} item dari AI berhasil disimpan.");
+        $savedCount = 0;
+        foreach ($this->aiSelectedIndices as $index) {
+            if (isset($this->aiGeneratedItems[$index])) {
+                $item = $this->aiGeneratedItems[$index];
+                $stockService->createStock(Auth::id(), [
+                    'name' => $item['name'],
+                    'sku' => $item['sku'] ?? null,
+                    'description' => $item['description'] ?? null,
+                    'quantity' => $item['quantity'] ?? 0,
+                    'unit' => $item['unit'] ?? 'pcs',
+                    'price' => $item['price'] ?? null,
+                    'min_stock' => $item['min_stock'] ?? 5,
+                    'status' => $item['status'] ?? StockStatus::AVAILABLE->value,
+                ]);
+                $savedCount++;
+            }
+        }
+
+        $this->closeAiModal();
+        session()->flash('success', "Berhasil menambahkan {$savedCount} item stok yang digenerate oleh AI.");
     }
 
-    public function render()
+    public function render(StockService $stockService): View
     {
-        $this->authorize('viewAny', Stock::class);
+        $stocks = $stockService->getStocksForUser(
+            Auth::id(),
+            $this->statusFilter ?: null,
+            $this->search ?: null,
+            8
+        );
 
         return view('livewire.stock.stock-list', [
-            'stocks' => $this->service()->paginate(
-                auth()->id(),
-                $this->search,
-                StockStatus::tryFrom($this->statusFilter)?->value,
-            ),
+            'stocks' => $stocks,
             'statuses' => StockStatus::cases(),
         ]);
-    }
-
-    private function service(): StockService
-    {
-        return app(StockService::class);
-    }
-
-    /** Ambil stok + pastikan pemilik (policy update). */
-    private function ownedStock(int $id): Stock
-    {
-        $stock = $this->service()->find($id);
-        $this->authorize('update', $stock);
-
-        return $stock;
-    }
-
-    private function resetForm(): void
-    {
-        $this->reset('editingId', 'name', 'sku', 'description', 'quantity', 'unit', 'price', 'min_stock');
-        $this->resetErrorBag();
     }
 }

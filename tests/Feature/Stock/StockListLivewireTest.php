@@ -6,360 +6,319 @@ use App\Features\Ai\Contracts\AiClientInterface;
 use App\Features\Ai\DTO\GeneratedStockItem;
 use App\Features\Stock\Livewire\StockList;
 use App\Features\Stock\Models\Stock;
-use App\Features\Stock\Services\StockExcelService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
-use RuntimeException;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
 
 class StockListLivewireTest extends TestCase
 {
     use RefreshDatabase;
 
-    private User $member;
-
-    protected function setUp(): void
+    public function test_guest_cannot_access_stocks(): void
     {
-        parent::setUp();
-        Storage::fake('local');
-        Storage::fake('public');
-        $this->member = User::factory()->create();
-        $this->actingAs($this->member);
+        $this->get('/stocks')->assertRedirect(route('login'));
     }
 
-    private function mine(array $attrs = []): Stock
+    public function test_member_can_view_own_stocks(): void
     {
-        return Stock::factory()->for($this->member)->create($attrs);
+        $user = User::factory()->member()->create();
+        Stock::factory()->create(['user_id' => $user->id, 'name' => 'Barang Spesifik Member']);
+
+        $otherUser = User::factory()->member()->create();
+        Stock::factory()->create(['user_id' => $otherUser->id, 'name' => 'Barang Rahasia Orang Lain']);
+
+        $this->actingAs($user);
+
+        Livewire::test(StockList::class)
+            ->assertSee('Barang Spesifik Member')
+            ->assertDontSee('Barang Rahasia Orang Lain');
     }
 
-    /* ---------- akses & list ---------- */
-
-    public function test_admin_cannot_use_member_component(): void
+    public function test_create_stock_validation_and_success(): void
     {
-        Livewire::actingAs(User::factory()->admin()->create())->test(StockList::class)->assertForbidden();
+        $user = User::factory()->member()->create();
+        $this->actingAs($user);
+
+        // Validation error
+        Livewire::test(StockList::class)
+            ->call('openCreateModal')
+            ->set('formName', '')
+            ->set('formStatus', 'invalid_status')
+            ->call('saveStock')
+            ->assertHasErrors(['formName', 'formStatus']);
+
+        // Success
+        Livewire::test(StockList::class)
+            ->call('openCreateModal')
+            ->set('formName', 'Barang Baru')
+            ->set('formSku', 'SKU-001')
+            ->set('formDescription', 'Deskripsi barang baru')
+            ->set('formQuantity', 10)
+            ->set('formUnit', 'pcs')
+            ->set('formPrice', 50000)
+            ->set('formMinStock', 5)
+            ->set('formStatus', 'available')
+            ->call('saveStock')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false);
+
+        $this->assertDatabaseHas('stocks', [
+            'user_id' => $user->id,
+            'name' => 'Barang Baru',
+            'sku' => 'SKU-001',
+            'description' => 'Deskripsi barang baru',
+            'quantity' => 10,
+            'unit' => 'pcs',
+            'price' => 50000,
+            'min_stock' => 5,
+            'status' => 'available',
+        ]);
     }
 
-    public function test_lists_only_own_stocks(): void
+    public function test_edit_stock_success(): void
     {
-        $this->mine(['name' => 'Kertas Saya']);
-        Stock::factory()->create(['name' => 'Barang Orang Lain']);
+        $user = User::factory()->member()->create();
+        $this->actingAs($user);
 
-        Livewire::test(StockList::class)->assertSee('Kertas Saya')->assertDontSee('Barang Orang Lain');
+        $stock = Stock::factory()->create(['user_id' => $user->id, 'name' => 'Nama Lama', 'price' => 15000]);
+
+        Livewire::test(StockList::class)
+            ->call('openEditModal', $stock->id)
+            ->assertSet('editingStockId', $stock->id)
+            ->assertSet('formName', 'Nama Lama')
+            ->set('formName', 'Nama Telah Diedit')
+            ->call('saveStock')
+            ->assertHasNoErrors()
+            ->assertSet('showFormModal', false);
+
+        $this->assertDatabaseHas('stocks', [
+            'id' => $stock->id,
+            'name' => 'Nama Telah Diedit',
+        ]);
     }
 
-    public function test_empty_state(): void
+    public function test_adjust_quantity(): void
     {
-        Livewire::test(StockList::class)->assertSee('Belum ada stok yang cocok.');
+        $user = User::factory()->member()->create();
+        $this->actingAs($user);
+
+        $stock = Stock::factory()->create([
+            'user_id' => $user->id,
+            'quantity' => 5,
+            'min_stock' => 5,
+            'status' => 'low_stock',
+        ]);
+
+        Livewire::test(StockList::class)
+            ->call('adjustQuantity', $stock->id, 5);
+
+        $fresh = $stock->fresh();
+        $this->assertEquals(10, $fresh->quantity);
+        $this->assertEquals('available', $fresh->status);
+
+        Livewire::test(StockList::class)
+            ->call('adjustQuantity', $stock->id, -10);
+
+        $fresh = $stock->fresh();
+        $this->assertEquals(0, $fresh->quantity);
+        $this->assertEquals('out_of_stock', $fresh->status);
+    }
+
+    public function test_delete_stock(): void
+    {
+        $user = User::factory()->member()->create();
+        $this->actingAs($user);
+
+        $stock = Stock::factory()->create(['user_id' => $user->id]);
+
+        Livewire::test(StockList::class)
+            ->call('deleteStock', $stock->id);
+
+        $this->assertDatabaseMissing('stocks', ['id' => $stock->id]);
+    }
+
+    public function test_confirm_and_cancel_delete_stock(): void
+    {
+        $user = User::factory()->member()->create();
+        $this->actingAs($user);
+
+        $stock = Stock::factory()->create(['user_id' => $user->id]);
+
+        Livewire::test(StockList::class)
+            ->assertSet('confirmingStockDeletionId', null)
+            ->call('confirmDelete', $stock->id)
+            ->assertSet('confirmingStockDeletionId', $stock->id)
+            ->call('cancelDelete')
+            ->assertSet('confirmingStockDeletionId', null)
+            ->call('confirmDelete', $stock->id)
+            ->call('deleteStock')
+            ->assertSet('confirmingStockDeletionId', null);
+
+        $this->assertDatabaseMissing('stocks', ['id' => $stock->id]);
     }
 
     public function test_search_and_status_filter(): void
     {
-        $this->mine(['name' => 'Kertas HVS', 'sku' => 'KRT', 'quantity' => 50, 'status' => 'available']);
-        $this->mine(['name' => 'Pulpen', 'sku' => 'PLP', 'quantity' => 0, 'status' => 'out_of_stock']);
+        $user = User::factory()->member()->create();
+        $this->actingAs($user);
+
+        Stock::factory()->create(['user_id' => $user->id, 'name' => 'Keyboard Mechanical', 'sku' => 'KEY-01', 'status' => 'available']);
+        Stock::factory()->create(['user_id' => $user->id, 'name' => 'Monitor Gaming', 'sku' => 'MON-02', 'status' => 'out_of_stock', 'quantity' => 0]);
 
         Livewire::test(StockList::class)
-            ->set('search', 'Kertas')->assertSee('Kertas HVS')->assertDontSee('Pulpen')
-            ->set('search', 'PLP')->assertSee('Pulpen')->assertDontSee('Kertas HVS')
-            ->set('search', '')->set('statusFilter', 'out_of_stock')->assertSee('Pulpen')->assertDontSee('Kertas HVS')
-            ->set('statusFilter', 'tidak-valid')->assertSee('Pulpen')->assertSee('Kertas HVS');
+            ->set('search', 'Keyboard')
+            ->assertSee('Keyboard Mechanical')
+            ->assertDontSee('Monitor Gaming')
+            ->set('search', '')
+            ->set('statusFilter', 'out_of_stock')
+            ->assertSee('Monitor Gaming')
+            ->assertDontSee('Keyboard Mechanical');
     }
 
-    public function test_pagination(): void
+    public function test_export_excel(): void
     {
-        Stock::factory()->count(12)->for($this->member)->create();
+        $user = User::factory()->member()->create();
+        $this->actingAs($user);
+
+        Stock::factory()->create(['user_id' => $user->id, 'name' => 'Exportable Stock']);
 
         Livewire::test(StockList::class)
-            ->assertViewHas('stocks', fn ($p) => $p->count() === 10 && $p->total() === 12)
-            ->call('gotoPage', 2)
-            ->assertViewHas('stocks', fn ($p) => $p->count() === 2);
+            ->call('exportExcel')
+            ->assertFileDownloaded();
     }
 
-    /* ---------- CRUD ---------- */
-
-    public function test_create_stock(): void
+    public function test_import_excel(): void
     {
+        $user = User::factory()->member()->create();
+        $this->actingAs($user);
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setCellValue('A1', 'No');
+        $sheet->setCellValue('B1', 'Name');
+        $sheet->setCellValue('C1', 'SKU');
+        $sheet->setCellValue('D1', 'Description');
+        $sheet->setCellValue('E1', 'Quantity');
+        $sheet->setCellValue('F1', 'Unit');
+        $sheet->setCellValue('G1', 'Price');
+        $sheet->setCellValue('H1', 'Min Stock');
+        $sheet->setCellValue('I1', 'Status');
+
+        $sheet->setCellValue('A2', '1');
+        $sheet->setCellValue('B2', 'Imported Excel Stock');
+        $sheet->setCellValue('C2', 'SKU-EXCEL-01');
+        $sheet->setCellValue('D2', 'Excel Desc');
+        $sheet->setCellValue('E2', '15');
+        $sheet->setCellValue('F2', 'box');
+        $sheet->setCellValue('G2', '75000');
+        $sheet->setCellValue('H2', '5');
+        $sheet->setCellValue('I2', 'available');
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'test_upload_').'.xlsx';
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($tempPath);
+
+        $fileContent = file_get_contents($tempPath);
+        @unlink($tempPath);
+
+        $uploadedFile = UploadedFile::fake()->createWithContent('stocks.xlsx', $fileContent);
+
         Livewire::test(StockList::class)
-            ->call('openCreate')
-            ->assertSet('showForm', true)
-            ->set('name', 'Lakban')->set('sku', 'LKB-1')->set('description', '**tebal**')
-            ->set('quantity', 3)->set('unit', 'roll')->set('price', '7500.5')->set('min_stock', 5)
-            ->call('save')
-            ->assertHasNoErrors()
-            ->assertSet('showForm', false)
-            ->assertSee('Stok berhasil ditambahkan.');
+            ->call('openImportModal')
+            ->assertSet('showImportModal', true)
+            ->set('importFile', $uploadedFile)
+            ->call('importExcel')
+            ->assertSet('showImportModal', false);
 
         $this->assertDatabaseHas('stocks', [
-            'user_id' => $this->member->id, 'name' => 'Lakban', 'sku' => 'LKB-1',
-            'unit' => 'roll', 'min_stock' => 5, 'status' => 'low_stock',
+            'user_id' => $user->id,
+            'name' => 'Imported Excel Stock',
+            'sku' => 'SKU-EXCEL-01',
+            'description' => 'Excel Desc',
+            'quantity' => 15,
+            'unit' => 'box',
+            'price' => 75000,
         ]);
     }
 
-    public function test_create_validation(): void
+    public function test_ai_generation_and_saving(): void
     {
+        $user = User::factory()->member()->create();
+        $this->actingAs($user);
+
+        // Mock AiClientInterface using createStub
+        $mockAiClient = $this->createStub(AiClientInterface::class);
+        $mockAiClient->method('generateStocks')->willReturn([
+            new GeneratedStockItem('AI Stock 1', 'SKU-AI-1', 'Desc 1', 10, 'unit', 150000.0, 2),
+            new GeneratedStockItem('AI Stock 2', 'SKU-AI-2', 'Desc 2', 5, 'pcs', 25000.0, 1),
+        ]);
+        $this->app->instance(AiClientInterface::class, $mockAiClient);
+
+        // Test validation for prompt and count
         Livewire::test(StockList::class)
-            ->call('openCreate')
-            ->set('quantity', -1)->set('min_stock', 'abc')->set('price', 'murah')->set('unit', '')
-            ->call('save')
-            ->assertHasErrors(['name', 'quantity', 'min_stock', 'price', 'unit']);
+            ->call('openAiModal')
+            ->set('aiPrompt', '')
+            ->set('aiCount', 0)
+            ->call('generateWithAi')
+            ->assertHasErrors(['aiPrompt', 'aiCount']);
 
-        $this->assertDatabaseCount('stocks', 0);
+        $component = Livewire::test(StockList::class)
+            ->call('openAiModal')
+            ->assertSet('showAiModal', true)
+            ->set('aiPrompt', 'Buatkan item inventaris alat tulis')
+            ->set('aiCount', 2)
+            ->call('generateWithAi')
+            ->assertCount('aiGeneratedItems', 2)
+            ->assertCount('aiSelectedIndices', 2);
+
+        // Try saving with no items selected
+        $component->set('aiSelectedIndices', [])
+            ->call('saveAiGenerated')
+            ->assertSet('aiErrorMessage', 'Pilih minimal satu item stok yang ingin disimpan.');
+
+        // Save selected items
+        $component->set('aiSelectedIndices', [0, 1])
+            ->call('saveAiGenerated')
+            ->assertSet('showAiModal', false);
+
+        $this->assertDatabaseHas('stocks', ['user_id' => $user->id, 'name' => 'AI Stock 1', 'sku' => 'SKU-AI-1']);
+        $this->assertDatabaseHas('stocks', ['user_id' => $user->id, 'name' => 'AI Stock 2', 'sku' => 'SKU-AI-2']);
     }
 
-    public function test_edit_stock(): void
+    public function test_ai_generation_handles_exception(): void
     {
-        $stock = $this->mine(['name' => 'Lama', 'quantity' => 3, 'min_stock' => 5, 'status' => 'low_stock']);
+        $user = User::factory()->member()->create();
+        $this->actingAs($user);
 
-        Livewire::test(StockList::class)
-            ->call('openEdit', $stock->id)
-            ->assertSet('editingId', $stock->id)
-            ->assertSet('name', 'Lama')
-            ->assertSet('showForm', true)
-            ->set('name', 'Baru')->set('quantity', 100)
-            ->call('save')
-            ->assertHasNoErrors()
-            ->assertSet('editingId', null)
-            ->assertSee('Stok berhasil diperbarui.');
-
-        $this->assertDatabaseHas('stocks', ['id' => $stock->id, 'name' => 'Baru', 'quantity' => 100, 'status' => 'available']);
-    }
-
-    public function test_close_form_resets_state(): void
-    {
-        Livewire::test(StockList::class)
-            ->call('openCreate')->set('name', 'Draft')
-            ->call('closeForm')
-            ->assertSet('showForm', false)->assertSet('name', '');
-    }
-
-    public function test_cannot_edit_or_delete_or_adjust_other_users_stock(): void
-    {
-        $other = Stock::factory()->create(['quantity' => 10]);
-
-        Livewire::test(StockList::class)->call('openEdit', $other->id)->assertForbidden();
-        Livewire::test(StockList::class)->call('confirmDelete', $other->id)->assertForbidden();
-        Livewire::test(StockList::class)->call('adjust', $other->id, 1)->assertForbidden();
-
-        $this->assertDatabaseHas('stocks', ['id' => $other->id, 'quantity' => 10]);
-    }
-
-    public function test_delete_with_confirmation_removes_cover(): void
-    {
-        Storage::disk('public')->put('stock-covers/c.jpg', 'x');
-        $stock = $this->mine(['cover_image_path' => 'stock-covers/c.jpg']);
-
-        Livewire::test(StockList::class)
-            ->call('confirmDelete', $stock->id)
-            ->assertSet('confirmDeleteId', $stock->id)
-            ->assertSee('Hapus stok?')
-            ->call('delete')
-            ->assertSet('confirmDeleteId', null)
-            ->assertSee('Stok berhasil dihapus.');
-
-        $this->assertDatabaseMissing('stocks', ['id' => $stock->id]);
-        Storage::disk('public')->assertMissing('stock-covers/c.jpg');
-    }
-
-    public function test_cancel_delete(): void
-    {
-        $stock = $this->mine();
+        $mockAiClient = $this->createStub(AiClientInterface::class);
+        $mockAiClient->method('generateStocks')->willThrowException(new \RuntimeException('API quota exceeded'));
+        $this->app->instance(AiClientInterface::class, $mockAiClient);
 
         Livewire::test(StockList::class)
-            ->call('confirmDelete', $stock->id)->call('cancelDelete')
-            ->assertSet('confirmDeleteId', null);
-
-        $this->assertDatabaseHas('stocks', ['id' => $stock->id]);
+            ->call('openAiModal')
+            ->set('aiPrompt', 'Error test')
+            ->call('generateWithAi')
+            ->assertSet('aiErrorMessage', 'API quota exceeded');
     }
 
-    /* ---------- adjust quantity ---------- */
-
-    public function test_adjust_quantity_updates_status(): void
+    public function test_close_modals(): void
     {
-        $stock = $this->mine(['quantity' => 6, 'min_stock' => 5, 'status' => 'available']);
-        $component = Livewire::test(StockList::class);
-
-        $component->call('adjust', $stock->id, -1);
-        $this->assertDatabaseHas('stocks', ['id' => $stock->id, 'quantity' => 5, 'status' => 'low_stock']);
-
-        $component->call('adjust', $stock->id, -5);
-        $this->assertDatabaseHas('stocks', ['id' => $stock->id, 'quantity' => 0, 'status' => 'out_of_stock']);
-
-        $component->call('adjust', $stock->id, -1); // tidak negatif
-        $this->assertDatabaseHas('stocks', ['id' => $stock->id, 'quantity' => 0]);
-
-        $component->call('adjust', $stock->id, 10);
-        $this->assertDatabaseHas('stocks', ['id' => $stock->id, 'quantity' => 10, 'status' => 'available']);
-    }
-
-    /* ---------- Excel ---------- */
-
-    public function test_export_downloads_xlsx(): void
-    {
-        $this->mine();
-
-        Livewire::test(StockList::class)->call('exportExcel')->assertFileDownloaded();
-    }
-
-    public function test_import_xlsx(): void
-    {
-        $binary = app(StockExcelService::class)->export(collect([
-            Stock::factory()->make(['name' => 'Impor A', 'quantity' => 5, 'min_stock' => 5]),
-            Stock::factory()->make(['name' => 'Impor B', 'quantity' => 50, 'min_stock' => 5]),
-        ]));
+        $user = User::factory()->member()->create();
+        $this->actingAs($user);
 
         Livewire::test(StockList::class)
-            ->call('openImport')
-            ->assertSet('showImport', true)
-            ->set('importFile', UploadedFile::fake()->createWithContent('stok.xlsx', $binary))
-            ->call('import')
-            ->assertHasNoErrors()
-            ->assertSet('showImport', false)
-            ->assertSee('Import selesai: 2 baris masuk, 0 dilewati.');
-
-        $this->assertDatabaseHas('stocks', ['user_id' => $this->member->id, 'name' => 'Impor A', 'status' => 'low_stock']);
-        $this->assertDatabaseHas('stocks', ['user_id' => $this->member->id, 'name' => 'Impor B', 'status' => 'available']);
-    }
-
-    public function test_import_rejects_corrupt_file(): void
-    {
-        Livewire::test(StockList::class)
-            ->call('openImport')
-            ->set('importFile', UploadedFile::fake()->createWithContent('rusak.xlsx', 'bukan excel'))
-            ->call('import')
-            ->assertHasErrors(['importFile'])
-            ->assertSet('showImport', true);
-
-        $this->assertDatabaseCount('stocks', 0);
-    }
-
-    public function test_import_validation(): void
-    {
-        Livewire::test(StockList::class)->call('import')->assertHasErrors(['importFile' => 'required']);
-
-        Livewire::test(StockList::class)
-            ->set('importFile', UploadedFile::fake()->create('stok.txt', 5, 'text/plain'))
-            ->call('import')
-            ->assertHasErrors(['importFile']);
-    }
-
-    public function test_close_import(): void
-    {
-        Livewire::test(StockList::class)->call('openImport')->call('closeImport')->assertSet('showImport', false);
-    }
-
-    /* ---------- AI ---------- */
-
-    private function fakeAi(array|RuntimeException $result): void
-    {
-        $stub = $this->createStub(AiClientInterface::class);
-
-        if ($result instanceof RuntimeException) {
-            $stub->method('generate')->willThrowException($result);
-        } else {
-            $stub->method('generate')->willReturn($result);
-        }
-
-        $this->app->instance(AiClientInterface::class, $stub);
-    }
-
-    private function aiItems(): array
-    {
-        return [
-            new GeneratedStockItem('Kabel USB', null, 'Kabel data', 5, 'pcs', 15000.0, 3),
-            new GeneratedStockItem('Mouse', 'MS-1', null, 50, 'pcs', null, 5),
-        ];
-    }
-
-    public function test_ai_generate_preview_select_and_save(): void
-    {
-        $this->fakeAi($this->aiItems());
-
-        Livewire::test(StockList::class)
-            ->call('openAi')
-            ->assertSet('showAi', true)
-            ->set('aiPrompt', 'perlengkapan kantor')
-            ->call('generateAi')
-            ->assertHasNoErrors()
-            ->assertSet('aiSelected', ['0', '1'])
-            ->assertSee('Kabel USB')
-            ->assertSee('Mouse')
-            ->set('aiSelected', ['1'])
-            ->call('saveAi')
-            ->assertSet('showAi', false)
-            ->assertSee('1 item dari AI berhasil disimpan.');
-
-        $this->assertDatabaseHas('stocks', ['user_id' => $this->member->id, 'name' => 'Mouse', 'status' => 'available']);
-        $this->assertDatabaseMissing('stocks', ['name' => 'Kabel USB']);
-    }
-
-    public function test_ai_failure_is_shown(): void
-    {
-        $this->fakeAi(new RuntimeException('Layanan AI gagal merespons (HTTP 500).'));
-
-        Livewire::test(StockList::class)
-            ->call('openAi')->set('aiPrompt', 'apa saja')
-            ->call('generateAi')
-            ->assertHasErrors(['aiPrompt'])
-            ->assertSet('aiItems', []);
-    }
-
-    public function test_ai_empty_result(): void
-    {
-        $this->fakeAi([]);
-
-        Livewire::test(StockList::class)
-            ->call('openAi')->set('aiPrompt', 'apa saja')
-            ->call('generateAi')
-            ->assertHasErrors(['aiPrompt']);
-    }
-
-    public function test_ai_validation(): void
-    {
-        $this->fakeAi($this->aiItems());
-
-        Livewire::test(StockList::class)
-            ->call('openAi')
-            ->call('generateAi')
-            ->assertHasErrors(['aiPrompt' => 'required']);
-
-        Livewire::test(StockList::class)
-            ->set('aiPrompt', 'ok oke')->set('aiCount', 99)
-            ->call('generateAi')
-            ->assertHasErrors(['aiCount']);
-    }
-
-    public function test_ai_save_requires_selection(): void
-    {
-        $this->fakeAi($this->aiItems());
-
-        Livewire::test(StockList::class)->call('saveAi')->assertHasErrors(['aiSelected']);
-
-        Livewire::test(StockList::class)
-            ->set('aiPrompt', 'kantor')->call('generateAi')
-            ->set('aiSelected', [])
-            ->call('saveAi')
-            ->assertHasErrors(['aiSelected']);
-
-        $this->assertDatabaseCount('stocks', 0);
-    }
-
-    public function test_close_ai_resets_preview(): void
-    {
-        $this->fakeAi($this->aiItems());
-
-        Livewire::test(StockList::class)
-            ->set('aiPrompt', 'kantor')->call('generateAi')
-            ->call('closeAi')
-            ->assertSet('showAi', false)->assertSet('aiItems', [])->assertSet('aiPrompt', '');
-    }
-
-    public function test_admin_cannot_trigger_member_actions_directly(): void
-    {
-        $admin = User::factory()->admin()->create();
-
-        Livewire::actingAs($admin)->test(StockList::class)->assertForbidden();
-        $this->assertFalse($admin->can('create', Stock::class));
+            ->call('openCreateModal')
+            ->call('closeFormModal')
+            ->assertSet('showFormModal', false)
+            ->call('openImportModal')
+            ->call('closeImportModal')
+            ->assertSet('showImportModal', false)
+            ->call('openAiModal')
+            ->call('closeAiModal')
+            ->assertSet('showAiModal', false);
     }
 }

@@ -4,23 +4,55 @@ namespace App\Features\Stock\Contracts;
 
 use App\Features\Stock\Models\Stock;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Collection;
 
 interface StockRepositoryInterface
 {
-    public function paginateForUser(int $userId, ?string $search, ?string $status, int $perPage = 10): LengthAwarePaginator;
+    /**
+     * Get paginated stocks for a given user with optional status and search filters.
+     */
+    public function forUser(int $userId, ?string $status = null, ?string $search = null, int $perPage = 10): LengthAwarePaginator;
 
-    /** @return Collection<int, Stock> */
+    /**
+     * Get all stocks for a given user without pagination.
+     *
+     * @return Collection<int, Stock>
+     */
     public function allForUser(int $userId): Collection;
 
+    /**
+     * Find a stock by id.
+     */
+    public function find(int $id): ?Stock;
+
+    /**
+     * Find a stock by id or throw an exception.
+     */
     public function findOrFail(int $id): Stock;
 
-    public function create(array $data): Stock;
+    /**
+     * Create a new stock item.
+     *
+     * @param array<string, mixed> $attributes
+     */
+    public function create(array $attributes): Stock;
 
-    public function update(Stock $stock, array $data): Stock;
+    /**
+     * Update an existing stock item.
+     *
+     * @param array<string, mixed> $attributes
+     */
+    public function update(Stock $stock, array $attributes): bool;
 
-    public function delete(Stock $stock): void;
+    /**
+     * Delete an existing stock item.
+     */
+    public function delete(Stock $stock): bool;
 
-    /** @return array{total:int, available:int, low_stock:int, out_of_stock:int} */
-    public function summaryForUser(int $userId): array;
+    /**
+     * Insert multiple stocks at once.
+     *
+     * @param array<int, array<string, mixed>> $records
+     */
+    public function insertMany(array $records): bool;
 }

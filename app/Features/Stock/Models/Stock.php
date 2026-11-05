@@ -2,61 +2,79 @@
 
 namespace App\Features\Stock\Models;
 
-use App\Features\Stock\Enums\StockStatus;
 use App\Models\User;
 use Database\Factories\StockFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
+#[Fillable([
+    'user_id',
+    'name',
+    'sku',
+    'description',
+    'quantity',
+    'unit',
+    'price',
+    'min_stock',
+    'status',
+    'cover_image_path',
+])]
 class Stock extends Model
 {
+    /** @use HasFactory<StockFactory> */
     use HasFactory;
 
-    protected $fillable = [
-        'user_id', 'name', 'sku', 'description', 'quantity', 'unit',
-        'price', 'min_stock', 'status', 'cover_image_path',
-    ];
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'stocks';
 
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [
             'quantity' => 'integer',
             'min_stock' => 'integer',
             'price' => 'decimal:2',
-            'status' => StockStatus::class,
         ];
     }
 
-    protected static function newFactory(): StockFactory
+    /**
+     * Get the public URL for the cover image.
+     */
+    public function coverImageUrl(): ?string
     {
-        return StockFactory::new();
+        if ($this->cover_image_path && Storage::disk('public')->exists($this->cover_image_path)) {
+            return Storage::disk('public')->url($this->cover_image_path);
+        }
+
+        return null;
     }
 
+    /**
+     * Get the user that owns the stock item.
+     *
+     * @return BelongsTo<User, $this>
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    public function coverUrl(): ?string
+    /**
+     * Create a new factory instance for the model.
+     */
+    protected static function newFactory(): StockFactory
     {
-        return $this->cover_image_path
-            ? Storage::disk('public')->url($this->cover_image_path)
-            : null;
-    }
-
-    /** Markdown -> HTML aman (HTML mentah dibuang, tautan berbahaya diblokir). */
-    public function descriptionHtml(): ?string
-    {
-        if ($this->description === null || $this->description === '') {
-            return null;
-        }
-
-        return Str::markdown($this->description, [
-            'html_input' => 'strip',
-            'allow_unsafe_links' => false,
-        ]);
+        return StockFactory::new();
     }
 }

@@ -3,45 +3,115 @@
 namespace App\Features\Profile\Services;
 
 use App\Models\User;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use RuntimeException;
 
 class ProfileService
 {
-    public function updateProfile(User $user, array $data): User
+    /**
+     * Update user personal information.
+     *
+     * @param array{name: string, username: string, email: string} $data
+     */
+    public function updateProfile(User $user, array $data): bool
     {
-        $user->update(Arr::only($data, ['name', 'username', 'email']));
-
-        return $user;
+        return $user->update([
+            'name' => $data['name'],
+            'username' => $data['username'],
+            'email' => $data['email'],
+        ]);
     }
 
-    public function updatePassword(User $user, string $password): void
+    /**
+     * Update user password.
+     */
+    public function updatePassword(User $user, string $newPassword): bool
     {
-        $user->update(['password' => $password]);
+        return $user->update([
+            'password' => Hash::make($newPassword),
+        ]);
     }
 
-    public function updatePhoto(User $user, UploadedFile $file): User
+    /**
+     * Crop image to 1:1 ratio and save as user's profile photo.
+     *
+     * @param string $imageData Base64 data URI or raw image contents or local path
+     */
+    public function updateProfilePhoto(User $user, string $imageData): string
     {
-        $path = $file->store('profile-photos', 'public');
-        $this->deletePhotoFile($user);
-        $user->update(['profile_photo_path' => $path]);
+        // Decode base64 if data URI
+        if (str_contains($imageData, ';base64,')) {
+            [, $content] = explode(';base64,', $imageData);
+            $binary = base64_decode($content);
+        } elseif (file_exists($imageData)) {
+            $binary = file_get_contents($imageData);
+        } else {
+            $binary = $imageData;
+        }
 
-        return $user;
+        $sourceImage = @imagecreatefromstring($binary);
+        if (!$sourceImage) {
+            throw new RuntimeException('Format gambar tidak valid atau tidak didukung.');
+        }
+
+        $origWidth = imagesx($sourceImage);
+        $origHeight = imagesy($sourceImage);
+
+        // Calculate center square crop coordinates
+        $cropSize = min($origWidth, $origHeight);
+        $srcX = (int) (($origWidth - $cropSize) / 2);
+        $srcY = (int) (($origHeight - $cropSize) / 2);
+
+        $targetSize = 400; // Standard 1:1 avatar resolution
+        $croppedCanvas = imagecreatetruecolor($targetSize, $targetSize);
+
+        // Preserve PNG transparency
+        imagealphablending($croppedCanvas, false);
+        imagesavealpha($croppedCanvas, true);
+
+        imagecopyresampled(
+            $croppedCanvas,
+            $sourceImage,
+            0,
+            0,
+            $srcX,
+            $srcY,
+            $targetSize,
+            $targetSize,
+            $cropSize,
+            $cropSize
+        );
+
+        ob_start();
+        imagepng($croppedCanvas, null, 8);
+        $outputBinary = ob_get_clean();
+
+        imagedestroy($sourceImage);
+        imagedestroy($croppedCanvas);
+
+        // Delete old photo if present
+        $this->deleteProfilePhoto($user);
+
+        $filename = 'profile-photos/'.Str::random(40).'.png';
+        Storage::disk('public')->put($filename, $outputBinary);
+
+        $user->update(['profile_photo_path' => $filename]);
+
+        return $filename;
     }
 
-    public function removePhoto(User $user): User
+    /**
+     * Delete existing profile photo.
+     */
+    public function deleteProfilePhoto(User $user): bool
     {
-        $this->deletePhotoFile($user);
-        $user->update(['profile_photo_path' => null]);
-
-        return $user;
-    }
-
-    private function deletePhotoFile(User $user): void
-    {
-        if ($user->profile_photo_path) {
+        if ($user->profile_photo_path && Storage::disk('public')->exists($user->profile_photo_path)) {
             Storage::disk('public')->delete($user->profile_photo_path);
         }
+
+        return $user->update(['profile_photo_path' => null]);
     }
 }
+

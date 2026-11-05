@@ -3,18 +3,23 @@
 namespace App\Features\Auth\Actions;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 
 class RegisterUserAction
 {
-    /** Pendaftaran publik selalu menghasilkan role member. */
+    /**
+     * Execute the user registration action.
+     *
+     * @param array{name: string, username: string, email: string, password: string, role?: string} $data
+     */
     public function execute(array $data): User
     {
         return User::create([
             'name' => $data['name'],
             'username' => $data['username'],
             'email' => $data['email'],
-            'password' => $data['password'],
-            'role' => User::ROLE_MEMBER,
+            'password' => Hash::make($data['password']),
+            'role' => $data['role'] ?? 'member',
         ]);
     }
 }

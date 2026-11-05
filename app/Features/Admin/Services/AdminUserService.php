@@ -3,39 +3,38 @@
 namespace App\Features\Admin\Services;
 
 use App\Features\Stock\Contracts\StockRepositoryInterface;
-use App\Features\Stock\Enums\StockStatus;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
-/** Layanan admin: hanya BACA. Tidak ada method yang mengubah/menghapus stok. */
 class AdminUserService
 {
-    public function __construct(private readonly StockRepositoryInterface $stocks) {}
+    public function __construct(
+        protected StockRepositoryInterface $stockRepository
+    ) {}
 
-    public function paginateUsers(?string $search, int $perPage = 10): LengthAwarePaginator
+    /**
+     * Get paginated list of all users with their stocks count.
+     */
+    public function getUsersList(?string $search = null, int $perPage = 10): LengthAwarePaginator
     {
-        return User::query()
-            ->withCount([
-                'stocks',
-                'stocks as low_stock_count' => fn ($q) => $q->where('status', StockStatus::LowStock->value),
-                'stocks as out_of_stock_count' => fn ($q) => $q->where('status', StockStatus::OutOfStock->value),
-            ])
-            ->when(filled($search), fn ($query) => $query->where(
-                fn ($q) => $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('username', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-            ))
-            ->orderBy('name')
-            ->paginate($perPage);
+        $query = User::query()->withCount('stocks');
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('username', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        return $query->latest('id')->paginate($perPage);
     }
 
-    public function paginateStocks(User $user, ?string $search, ?string $status, int $perPage = 10): LengthAwarePaginator
+    /**
+     * Get read-only list of stocks for a specific target user.
+     */
+    public function getUserStocks(int $userId, ?string $status = null, ?string $search = null, int $perPage = 10): LengthAwarePaginator
     {
-        return $this->stocks->paginateForUser($user->id, $search, $status, $perPage);
-    }
-
-    public function summary(User $user): array
-    {
-        return $this->stocks->summaryForUser($user->id);
+        return $this->stockRepository->forUser($userId, $status, $search, $perPage);
     }
 }
