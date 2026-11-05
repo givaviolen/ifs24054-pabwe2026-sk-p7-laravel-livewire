@@ -10,10 +10,11 @@ class RoutingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_root_redirects_guest_to_login(): void
+    public function test_root_is_accessible_for_guest(): void
     {
         $this->get('/')
-            ->assertRedirect(route('login'));
+            ->assertOk()
+            ->assertSee('Masuk ke Akun Anda');
     }
 
     public function test_root_redirects_member_to_stocks(): void
