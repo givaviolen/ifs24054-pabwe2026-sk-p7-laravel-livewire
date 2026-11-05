@@ -3,35 +3,30 @@
 namespace App\Features\Admin\Livewire;
 
 use App\Features\Admin\Services\AdminUserService;
-use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 #[Layout('components.layouts.app')]
-#[Title('User Management - Admin')]
+#[Title('Daftar User')]
 class UserList extends Component
 {
     use WithPagination;
 
+    #[Url(as: 'q')]
     public string $search = '';
 
-    protected $queryString = [
-        'search' => ['except' => ''],
-    ];
-
-    public function updatedSearch(): void
+    public function updatingSearch(): void
     {
         $this->resetPage();
     }
 
-    public function render(AdminUserService $adminService): View
+    public function render()
     {
-        $users = $adminService->getUsersList($this->search ?: null, 10);
-
         return view('livewire.admin.user-list', [
-            'users' => $users,
+            'users' => app(AdminUserService::class)->paginateUsers($this->search),
         ]);
     }
 }

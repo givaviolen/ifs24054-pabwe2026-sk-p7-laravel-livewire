@@ -1,108 +1,56 @@
-<div>
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-            <div class="flex items-center space-x-2">
-                <a href="{{ route('admin.users') }}" class="p-1 rounded-lg text-slate-500 hover:bg-slate-200 transition">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
-                </a>
-                <h1 class="text-2xl font-bold text-slate-900">Stok Pengguna: {{ $user->name }}</h1>
-            </div>
-            <p class="text-sm text-slate-500 mt-1 ml-7">{{ $user->email }} &bull; Mode Lihat Saja (Read-Only Admin)</p>
-        </div>
+<div class="space-y-4">
+    <a href="{{ route('admin.users') }}" class="text-sm text-teal-700 hover:underline">← Kembali ke daftar user</a>
 
+    <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
-            <button wire:click="exportExcel" wire:loading.attr="disabled" class="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-slate-700 hover:bg-slate-800 disabled:opacity-75 text-white text-sm font-semibold rounded-lg shadow-sm transition">
-                <svg wire:loading.remove wire:target="exportExcel" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                <svg wire:loading wire:target="exportExcel" class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                </svg>
-                <span wire:loading.remove wire:target="exportExcel">Export Excel Stok Ini</span>
-                <span wire:loading wire:target="exportExcel">Mengekspor...</span>
-            </button>
+            <h1 class="text-2xl font-semibold">Stok milik {{ $user->name }}</h1>
+            <p class="text-sm text-slate-500">{{ $user->username }} · {{ $user->email }} · tampilan hanya-baca</p>
         </div>
+        <dl class="flex gap-4 text-sm">
+            <div><dt class="text-slate-500">Total</dt><dd class="font-semibold">{{ $summary['total'] }}</dd></div>
+            <div><dt class="text-slate-500">Menipis</dt><dd class="font-semibold text-yellow-700">{{ $summary['low_stock'] }}</dd></div>
+            <div><dt class="text-slate-500">Habis</dt><dd class="font-semibold text-red-700">{{ $summary['out_of_stock'] }}</dd></div>
+        </dl>
     </div>
 
-    <!-- Filters -->
-    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <div class="w-full sm:w-72 relative">
-            <input wire:model.live.debounce.300ms="search" type="text" placeholder="Cari nama, SKU, atau deskripsi..." class="w-full pl-3.5 pr-9 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <div wire:loading wire:target="search,statusFilter" class="absolute right-3 top-2.5">
-                <svg class="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                </svg>
-            </div>
-        </div>
-
-        <div class="flex items-center space-x-3 w-full sm:w-auto">
-            <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Status:</label>
-            <select wire:model.live="statusFilter" class="px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                <option value="">Semua Status</option>
-                @foreach ($statuses as $status)
-                    <option value="{{ $status->value }}">{{ $status->label() }}</option>
-                @endforeach
-            </select>
-        </div>
+    <div class="flex flex-wrap gap-3">
+        <input type="search" wire:model.live.debounce.300ms="search" placeholder="Cari nama atau SKU…"
+               class="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm sm:w-72">
+        <select wire:model.live="statusFilter" class="rounded border border-slate-300 bg-white px-3 py-2 text-sm">
+            <option value="">Semua status</option>
+            <option value="available">Tersedia</option>
+            <option value="low_stock">Stok Menipis</option>
+            <option value="out_of_stock">Habis</option>
+        </select>
     </div>
 
-    <!-- Table of user's stocks -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse text-sm">
-                <thead>
-                    <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        <th class="py-3.5 px-6">No</th>
-                        <th class="py-3.5 px-6">Nama Barang</th>
-                        <th class="py-3.5 px-6">SKU</th>
-                        <th class="py-3.5 px-6">Jumlah</th>
-                        <th class="py-3.5 px-6">Harga</th>
-                        <th class="py-3.5 px-6">Status</th>
-                        <th class="py-3.5 px-6">Dibuat Pada</th>
+    <div class="overflow-x-auto rounded-lg bg-white shadow-sm">
+        <table class="min-w-full text-sm">
+            <thead class="bg-slate-100 text-left text-slate-600">
+                <tr>
+                    <th class="px-4 py-3">Barang</th>
+                    <th class="px-4 py-3">Quantity</th>
+                    <th class="px-4 py-3">Harga</th>
+                    <th class="px-4 py-3">Status</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                @forelse ($stocks as $stock)
+                    <tr wire:key="stock-{{ $stock->id }}">
+                        <td class="px-4 py-3">
+                            <p class="font-medium">{{ $stock->name }}</p>
+                            <p class="text-xs text-slate-500">{{ $stock->sku ?: 'Tanpa SKU' }}</p>
+                        </td>
+                        <td class="px-4 py-3">{{ number_format($stock->quantity) }} {{ $stock->unit }} <span class="text-xs text-slate-500">(min. {{ $stock->min_stock }})</span></td>
+                        <td class="px-4 py-3">{{ $stock->price !== null ? 'Rp '.number_format((float) $stock->price, 0, ',', '.') : '—' }}</td>
+                        <td class="px-4 py-3"><span class="rounded-full px-2 py-0.5 text-xs font-medium {{ $stock->status->badgeClass() }}">{{ $stock->status->label() }}</span></td>
                     </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    @forelse ($stocks as $index => $stock)
-                        <tr class="hover:bg-slate-50/80 transition">
-                            <td class="py-4 px-6 text-slate-400 text-xs">
-                                {{ $stocks->firstItem() + $index }}
-                            </td>
-                            <td class="py-4 px-6 font-semibold text-slate-900">
-                                {{ $stock->name }}
-                            </td>
-                            <td class="py-4 px-6 font-mono text-xs text-slate-600">
-                                {{ $stock->sku ?? '-' }}
-                            </td>
-                            <td class="py-4 px-6 font-bold text-slate-700">
-                                {{ $stock->quantity }} {{ $stock->unit }}
-                            </td>
-                            <td class="py-4 px-6 text-slate-600 text-xs">
-                                {{ $stock->price !== null ? 'Rp ' . number_format($stock->price, 0, ',', '.') : '-' }}
-                            </td>
-                            <td class="py-4 px-6">
-                                <span class="px-2 py-0.5 text-xs font-semibold rounded-full border {{ \App\Features\Stock\Enums\StockStatus::tryFrom($stock->status)?->badgeClass() ?? 'bg-slate-100 text-slate-700' }}">
-                                    {{ \App\Features\Stock\Enums\StockStatus::tryFrom($stock->status)?->label() ?? ucfirst($stock->status) }}
-                                </span>
-                            </td>
-                            <td class="py-4 px-6 text-slate-500 text-xs">
-                                {{ $stock->created_at ? $stock->created_at->format('d M Y H:i') : '-' }}
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="7" class="py-12 text-center text-slate-500">
-                                Pengguna ini belum memiliki data stok.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        <div class="p-4 border-t border-slate-100">
-            {{ $stocks->links() }}
-        </div>
+                @empty
+                    <tr><td colspan="4" class="px-4 py-10 text-center text-slate-500">User ini belum punya stok.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
     </div>
+
+    {{ $stocks->links() }}
 </div>

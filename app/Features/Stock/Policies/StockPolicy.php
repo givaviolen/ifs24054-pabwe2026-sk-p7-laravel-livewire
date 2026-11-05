@@ -7,46 +7,34 @@ use App\Models\User;
 
 class StockPolicy
 {
-    /**
-     * Determine whether the user can view any models.
-     */
     public function viewAny(User $user): bool
     {
-        return true;
+        return $user->isMember();
     }
 
-    /**
-     * Determine whether the user can view the model.
-     * Admin can view any user's stock (read-only); member can only view their own.
-     */
+    /** Pemilik boleh melihat; admin boleh melihat (read-only). */
     public function view(User $user, Stock $stock): bool
     {
-        return $user->isAdmin() || $user->id === $stock->user_id;
+        return $user->isAdmin() || $this->owns($user, $stock);
     }
 
-    /**
-     * Determine whether the user can create models.
-     */
     public function create(User $user): bool
     {
-        return true;
+        return $user->isMember();
     }
 
-    /**
-     * Determine whether the user can update the model.
-     * Only the owner can update their stock (admin cannot edit).
-     */
     public function update(User $user, Stock $stock): bool
     {
-        return $user->id === $stock->user_id;
+        return $user->isMember() && $this->owns($user, $stock);
     }
 
-    /**
-     * Determine whether the user can delete the model.
-     * Only the owner can delete their stock (admin cannot delete).
-     */
     public function delete(User $user, Stock $stock): bool
     {
-        return $user->id === $stock->user_id;
+        return $this->update($user, $stock);
+    }
+
+    private function owns(User $user, Stock $stock): bool
+    {
+        return $stock->user_id === $user->id;
     }
 }

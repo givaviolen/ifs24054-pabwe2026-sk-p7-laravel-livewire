@@ -15,168 +15,104 @@ class ProfileLivewireTest extends TestCase
 {
     use RefreshDatabase;
 
+    private User $user;
+
     protected function setUp(): void
     {
         parent::setUp();
+        Storage::fake('local');
         Storage::fake('public');
+        $this->user = User::factory()->create(['password' => 'lama-12345']);
+        $this->actingAs($this->user);
     }
 
-    public function test_guest_cannot_access_profile(): void
+    public function test_mount_fills_current_data(): void
     {
-        $this->get('/profile')
-            ->assertRedirect(route('login'));
+        Livewire::test(Profile::class)
+            ->assertSet('name', $this->user->name)
+            ->assertSet('username', $this->user->username)
+            ->assertSet('email', $this->user->email);
     }
 
-    public function test_profile_mounts_with_authenticated_user_data(): void
+    public function test_update_profile(): void
     {
-        $user = User::factory()->create([
-            'name' => 'Budi Setiawan',
-            'username' => 'budiset',
-            'email' => 'budi@test.com',
-        ]);
-
-        $this->actingAs($user);
-
         Livewire::test(Profile::class)
-            ->assertSet('name', 'Budi Setiawan')
-            ->assertSet('username', 'budiset')
-            ->assertSet('email', 'budi@test.com');
+            ->set('name', 'Nama Baru')->set('username', 'nama_baru')->set('email', 'baru@example.com')
+            ->call('updateProfile')
+            ->assertHasNoErrors()
+            ->assertSee('Profil berhasil diperbarui.');
+
+        $this->assertDatabaseHas('users', ['id' => $this->user->id, 'username' => 'nama_baru', 'email' => 'baru@example.com']);
     }
 
-    public function test_update_profile_information_validation(): void
+    public function test_update_profile_allows_keeping_own_username_but_not_taking_others(): void
     {
-        $user = User::factory()->create();
-        $otherUser = User::factory()->create([
-            'username' => 'taken_username',
-            'email' => 'taken@test.com',
-        ]);
+        $other = User::factory()->create();
 
-        $this->actingAs($user);
+        Livewire::test(Profile::class)->call('updateProfile')->assertHasNoErrors();
 
         Livewire::test(Profile::class)
-            ->set('name', '')
-            ->set('username', 'taken_username')
-            ->set('email', 'taken@test.com')
-            ->call('updateProfileInformation')
-            ->assertHasErrors(['name', 'username', 'email']);
+            ->set('username', $other->username)->set('email', $other->email)
+            ->call('updateProfile')
+            ->assertHasErrors(['username', 'email']);
     }
 
-    public function test_update_profile_information_success(): void
+    public function test_update_password(): void
     {
-        $user = User::factory()->create();
-        $this->actingAs($user);
-
         Livewire::test(Profile::class)
-            ->set('name', 'Updated Name')
-            ->set('username', 'updated_username')
-            ->set('email', 'updated@test.com')
-            ->call('updateProfileInformation')
-            ->assertHasNoErrors();
-
-        $user->refresh();
-        $this->assertEquals('Updated Name', $user->name);
-        $this->assertEquals('updated_username', $user->username);
-        $this->assertEquals('updated@test.com', $user->email);
-    }
-
-    public function test_update_password_validation_and_mismatch(): void
-    {
-        $user = User::factory()->create([
-            'password' => Hash::make('original_pass'),
-        ]);
-        $this->actingAs($user);
-
-        // Validation required
-        Livewire::test(Profile::class)
-            ->set('current_password', '')
-            ->set('password', '')
-            ->call('updatePassword')
-            ->assertHasErrors(['current_password', 'password']);
-
-        // Current password wrong
-        Livewire::test(Profile::class)
-            ->set('current_password', 'wrong_pass')
-            ->set('password', 'new_secret_123')
-            ->set('password_confirmation', 'new_secret_123')
-            ->call('updatePassword')
-            ->assertHasErrors(['current_password']);
-    }
-
-    public function test_update_password_success(): void
-    {
-        $user = User::factory()->create([
-            'password' => Hash::make('original_pass'),
-        ]);
-        $this->actingAs($user);
-
-        Livewire::test(Profile::class)
-            ->set('current_password', 'original_pass')
-            ->set('password', 'new_secret_123')
-            ->set('password_confirmation', 'new_secret_123')
+            ->set('current_password', 'lama-12345')
+            ->set('password', 'baru-123456')
+            ->set('password_confirmation', 'baru-123456')
             ->call('updatePassword')
             ->assertHasNoErrors()
             ->assertSet('current_password', '')
-            ->assertSet('password', '');
+            ->assertSee('Password berhasil diubah.');
 
-        $this->assertTrue(Hash::check('new_secret_123', $user->fresh()->password));
+        $this->assertTrue(Hash::check('baru-123456', $this->user->fresh()->password));
     }
 
-    public function test_photo_upload_and_crop_saving(): void
+    public function test_update_password_validation(): void
     {
-        $user = User::factory()->create();
-        $this->actingAs($user);
-
-        $dummyFile = UploadedFile::fake()->image('avatar.jpg', 200, 200);
-
-        // Test updatedPhoto triggering crop modal
-        $component = Livewire::test(Profile::class)
-            ->set('photo', $dummyFile)
-            ->assertSet('showCropModal', true);
-
-        // Test close crop modal
-        $component->call('closeCropModal')
-            ->assertSet('showCropModal', false);
-        $this->assertNull($component->get('photo'));
-
-        // Test saving with fallback to uploaded file
-        $component->set('photo', $dummyFile)
-            ->call('saveCroppedPhoto')
-            ->assertSet('showCropModal', false);
-
-        $user->refresh();
-        $this->assertNotNull($user->profile_photo_path);
-
-        // Test saving with empty photo error
         Livewire::test(Profile::class)
-            ->set('croppedPhoto', '')
-            ->set('photo', null)
-            ->call('saveCroppedPhoto')
+            ->set('current_password', 'salah')
+            ->set('password', 'baru-123456')->set('password_confirmation', 'baru-123456')
+            ->call('updatePassword')
+            ->assertHasErrors(['current_password']);
+
+        Livewire::test(Profile::class)
+            ->set('current_password', 'lama-12345')
+            ->set('password', 'lama-12345')->set('password_confirmation', 'lama-12345')
+            ->call('updatePassword')
+            ->assertHasErrors(['password']);
+    }
+
+    public function test_photo_upload_and_remove(): void
+    {
+        Livewire::test(Profile::class)
+            ->set('photo', UploadedFile::fake()->image('me.jpg'))
+            ->call('updatePhoto')
+            ->assertHasNoErrors()
+            ->assertSee('Foto profil berhasil diperbarui.')
+            ->call('removePhoto')
+            ->assertSee('Foto profil dihapus.');
+
+        $this->assertNull($this->user->fresh()->profile_photo_path);
+    }
+
+    public function test_photo_rules(): void
+    {
+        Livewire::test(Profile::class)->call('updatePhoto')->assertHasErrors(['photo' => 'required']);
+
+        Livewire::test(Profile::class)
+            ->set('photo', UploadedFile::fake()->create('doc.pdf', 10, 'application/pdf'))
+            ->call('updatePhoto')
             ->assertHasErrors(['photo']);
-
-        // Test delete photo
-        Livewire::test(Profile::class)
-            ->call('deletePhoto');
-
-        $user->refresh();
-        $this->assertNull($user->profile_photo_path);
     }
 
-    public function test_confirm_and_cancel_delete_profile_photo(): void
+    public function test_photo_is_rendered_when_present(): void
     {
-        $user = User::factory()->create(['profile_photo_path' => 'photos/test.jpg']);
-        $this->actingAs($user);
+        $this->user->update(['profile_photo_path' => 'profile-photos/x.jpg']);
 
-        Livewire::test(Profile::class)
-            ->assertSet('confirmingPhotoDeletion', false)
-            ->call('confirmDeletePhoto')
-            ->assertSet('confirmingPhotoDeletion', true)
-            ->call('cancelDeletePhoto')
-            ->assertSet('confirmingPhotoDeletion', false)
-            ->call('confirmDeletePhoto')
-            ->call('deletePhoto')
-            ->assertSet('confirmingPhotoDeletion', false);
-
-        $user->refresh();
-        $this->assertNull($user->profile_photo_path);
+        Livewire::test(Profile::class)->assertSee('profile-photos/x.jpg');
     }
 }

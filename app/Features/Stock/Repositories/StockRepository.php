@@ -3,102 +3,69 @@
 namespace App\Features\Stock\Repositories;
 
 use App\Features\Stock\Contracts\StockRepositoryInterface;
+use App\Features\Stock\Enums\StockStatus;
 use App\Features\Stock\Models\Stock;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection;
 
 class StockRepository implements StockRepositoryInterface
 {
-    /**
-     * Get paginated stocks for a given user with optional status and search filters.
-     */
-    public function forUser(int $userId, ?string $status = null, ?string $search = null, int $perPage = 10): LengthAwarePaginator
-    {
-        $query = Stock::query()->where('user_id', $userId);
-
-        if (!empty($status)) {
-            $query->where('status', $status);
-        }
-
-        if (!empty($search)) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('sku', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
-            });
-        }
-
-        return $query->latest('id')->paginate($perPage);
-    }
-
-    /**
-     * Get all stocks for a given user without pagination.
-     *
-     * @return Collection<int, Stock>
-     */
-    public function allForUser(int $userId): Collection
+    public function paginateForUser(int $userId, ?string $search, ?string $status, int $perPage = 10): LengthAwarePaginator
     {
         return Stock::query()
             ->where('user_id', $userId)
+            ->when(filled($search), fn ($query) => $query->where(
+                fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")
+            ))
+            ->when(filled($status), fn ($query) => $query->where('status', $status))
             ->latest('id')
-            ->get();
+            ->paginate($perPage);
     }
 
-    /**
-     * Find a stock by id.
-     */
-    public function find(int $id): ?Stock
+    public function allForUser(int $userId): Collection
     {
-        return Stock::find($id);
+        return Stock::query()->where('user_id', $userId)->orderBy('name')->get();
     }
 
-    /**
-     * Find a stock by id or throw an exception.
-     */
     public function findOrFail(int $id): Stock
     {
-        return Stock::findOrFail($id);
+        return Stock::query()->findOrFail($id);
     }
 
-    /**
-     * Create a new stock item.
-     *
-     * @param array<string, mixed> $attributes
-     */
-    public function create(array $attributes): Stock
+    public function create(array $data): Stock
     {
-        return Stock::create($attributes);
+        return Stock::query()->create($data);
     }
 
-    /**
-     * Update an existing stock item.
-     *
-     * @param array<string, mixed> $attributes
-     */
-    public function update(Stock $stock, array $attributes): bool
+    public function update(Stock $stock, array $data): Stock
     {
-        return $stock->update($attributes);
+        $stock->fill($data)->save();
+
+        return $stock;
     }
 
-    /**
-     * Delete an existing stock item.
-     */
-    public function delete(Stock $stock): bool
+    public function delete(Stock $stock): void
     {
-        return (bool) $stock->delete();
+        $stock->delete();
     }
 
-    /**
-     * Insert multiple stocks at once.
-     *
-     * @param array<int, array<string, mixed>> $records
-     */
-    public function insertMany(array $records): bool
+    public function summaryForUser(int $userId): array
     {
-        if (empty($records)) {
-            return true;
-        }
+        $counts = Stock::query()
+            ->where('user_id', $userId)
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
 
-        return Stock::insert($records);
+        $available = (int) ($counts[StockStatus::Available->value] ?? 0);
+        $low = (int) ($counts[StockStatus::LowStock->value] ?? 0);
+        $out = (int) ($counts[StockStatus::OutOfStock->value] ?? 0);
+
+        return [
+            'total' => $available + $low + $out,
+            'available' => $available,
+            'low_stock' => $low,
+            'out_of_stock' => $out,
+        ];
     }
 }

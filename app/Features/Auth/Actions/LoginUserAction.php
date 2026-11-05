@@ -3,21 +3,33 @@
 namespace App\Features\Auth\Actions;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class LoginUserAction
 {
-    /**
-     * Execute authentication using username or email and regenerate session.
-     */
-    public function execute(string $login, string $password, bool $remember = false): bool
-    {
-        $field = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+    public const MAX_ATTEMPTS = 5;
 
-        if (Auth::attempt([$field => $login, 'password' => $password], $remember)) {
-            session()->regenerate();
-            return true;
+    /** @throws ValidationException bila kredensial salah / terlalu banyak percobaan. */
+    public function execute(string $login, string $password, bool $remember = false): void
+    {
+        $key = Str::lower($login).'|'.request()->ip();
+
+        if (RateLimiter::tooManyAttempts($key, self::MAX_ATTEMPTS)) {
+            throw ValidationException::withMessages([
+                'login' => 'Terlalu banyak percobaan. Coba lagi dalam '.RateLimiter::availableIn($key).' detik.',
+            ]);
         }
 
-        return false;
+        $field = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+
+        if (! Auth::attempt([$field => $login, 'password' => $password], $remember)) {
+            RateLimiter::hit($key, 60);
+
+            throw ValidationException::withMessages(['login' => 'Username/email atau password salah.']);
+        }
+
+        RateLimiter::clear($key);
     }
 }

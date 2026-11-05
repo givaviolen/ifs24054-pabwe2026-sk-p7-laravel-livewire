@@ -2,178 +2,131 @@
 
 namespace App\Features\Stock\Services;
 
-use App\Features\Stock\Contracts\StockRepositoryInterface;
-use App\Features\Stock\Enums\StockStatus;
 use App\Features\Stock\Models\Stock;
-use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Collection;
-use PhpOffice\PhpSpreadsheet\IOFactory;
+use App\Models\User;
+use InvalidArgumentException;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Exception as SpreadsheetException;
+use PhpOffice\PhpSpreadsheet\Reader\Xlsx as XlsxReader;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
-use PhpOffice\PhpSpreadsheet\Style\Border;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Validator;
 
 class StockExcelService
 {
-    public function __construct(
-        protected StockRepositoryInterface $stockRepository
-    ) {}
+    public const HEADERS = ['name', 'sku', 'quantity', 'unit', 'price', 'min_stock', 'status', 'description'];
 
-    /**
-     * Build a Spreadsheet instance containing stocks data.
-     *
-     * @param Collection<int, Stock> $stocks
-     */
-    public function buildSpreadsheet(Collection $stocks, string $sheetTitle = 'Stocks'): Spreadsheet
+    public const MAX_ROWS = 1000;
+
+    public function __construct(private readonly StockService $stocks) {}
+
+    /** @param  Collection<int, Stock>  $stocks  @return string isi file .xlsx */
+    public function export(Collection $stocks): string
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle(substr($sheetTitle, 0, 31));
+        $sheet->setTitle('Stok');
 
-        $headers = ['No', 'Name', 'SKU', 'Description', 'Quantity', 'Unit', 'Price', 'Min Stock', 'Status', 'Created At'];
-        $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+        foreach (self::HEADERS as $i => $header) {
+            $sheet->setCellValueExplicit([$i + 1, 1], $header, DataType::TYPE_STRING);
+        }
+        $sheet->getStyle('A1:H1')->getFont()->setBold(true);
 
-        foreach ($headers as $index => $header) {
-            $sheet->setCellValue("{$columns[$index]}1", $header);
+        foreach ($stocks->values() as $i => $stock) {
+            $row = $i + 2;
+            // Teks ditulis eksplisit sebagai string: mencegah formula injection (=, +, -, @).
+            $sheet->setCellValueExplicit("A{$row}", (string) $stock->name, DataType::TYPE_STRING);
+            $sheet->setCellValueExplicit("B{$row}", (string) $stock->sku, DataType::TYPE_STRING);
+            $sheet->setCellValueExplicit("C{$row}", $stock->quantity, DataType::TYPE_NUMERIC);
+            $sheet->setCellValueExplicit("D{$row}", (string) $stock->unit, DataType::TYPE_STRING);
+            if ($stock->price !== null) {
+                $sheet->setCellValueExplicit("E{$row}", (float) $stock->price, DataType::TYPE_NUMERIC);
+            }
+            $sheet->setCellValueExplicit("F{$row}", $stock->min_stock, DataType::TYPE_NUMERIC);
+            $sheet->setCellValueExplicit("G{$row}", $stock->status->value, DataType::TYPE_STRING);
+            $sheet->setCellValueExplicit("H{$row}", (string) $stock->description, DataType::TYPE_STRING);
         }
 
-        // Header Styling
-        $headerRange = 'A1:J1';
-        $sheet->getStyle($headerRange)->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
-        $sheet->getStyle($headerRange)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('2563EB');
-        $sheet->getStyle($headerRange)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-        $rowNumber = 2;
-        foreach ($stocks as $idx => $stock) {
-            $sheet->setCellValue("A{$rowNumber}", $idx + 1);
-            $sheet->setCellValue("B{$rowNumber}", $stock->name);
-            $sheet->setCellValue("C{$rowNumber}", $stock->sku ?? '-');
-            $sheet->setCellValue("D{$rowNumber}", $stock->description ?? '-');
-            $sheet->setCellValue("E{$rowNumber}", $stock->quantity);
-            $sheet->setCellValue("F{$rowNumber}", $stock->unit ?? 'pcs');
-            $sheet->setCellValue("G{$rowNumber}", $stock->price !== null ? number_format((float) $stock->price, 2, '.', '') : '-');
-            $sheet->setCellValue("H{$rowNumber}", $stock->min_stock);
-            $sheet->setCellValue("I{$rowNumber}", ucfirst(str_replace('_', ' ', $stock->status)));
-            $sheet->setCellValue("J{$rowNumber}", $stock->created_at ? $stock->created_at->format('Y-m-d H:i') : '-');
-            $rowNumber++;
-        }
-
-        $lastRow = max(2, $rowNumber - 1);
-        $sheet->getStyle("A1:J{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-
-        foreach ($columns as $column) {
+        foreach (range('A', 'H') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
 
-        return $spreadsheet;
+        $tmp = tempnam(sys_get_temp_dir(), 'stk');
+        (new Xlsx($spreadsheet))->save($tmp);
+        $content = (string) file_get_contents($tmp);
+        unlink($tmp);
+
+        return $content;
     }
 
     /**
-     * Export stocks as a downloadable streamed response.
+     * Import stok dari .xlsx. Baris tidak valid dilewati.
      *
-     * @param Collection<int, Stock> $stocks
-     */
-    public function exportToResponse(Collection $stocks, string $filename = 'stocks.xlsx'): StreamedResponse
-    {
-        $spreadsheet = $this->buildSpreadsheet($stocks);
-
-        return response()->streamDownload(function () use ($spreadsheet) {
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output');
-        }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Cache-Control' => 'max-age=0',
-        ]);
-    }
-
-    /**
-     * Import stocks from an uploaded spreadsheet file path.
+     * @return array{imported:int, skipped:int}
      *
-     * @return array{imported: int, errors: array<int, string>}
+     * @throws InvalidArgumentException bila file tidak dapat dibaca / header "name" tidak ada.
      */
-    public function import(string $filePath, int $userId): array
+    public function import(User $user, string $path): array
     {
-        $spreadsheet = IOFactory::load($filePath);
-        $sheet = $spreadsheet->getActiveSheet();
-        $rows = $sheet->toArray(null, true, true, true);
-
-        $imported = 0;
-        $errors = [];
-        $recordsToInsert = [];
-        $now = Carbon::now();
-
-        // Skip header row
-        $isFirst = true;
-        $rowIndex = 1;
-
-        foreach ($rows as $row) {
-            if ($isFirst) {
-                $isFirst = false;
-                $rowIndex++;
-                continue;
-            }
-
-            $name = isset($row['B']) && trim((string) $row['B']) !== '' ? trim((string) $row['B']) : (isset($row['A']) ? trim((string) $row['A']) : '');
-            $sku = isset($row['C']) ? trim((string) $row['C']) : null;
-            $description = isset($row['D']) ? trim((string) $row['D']) : null;
-            $quantityRaw = isset($row['E']) ? trim((string) $row['E']) : '0';
-            $unit = isset($row['F']) && trim((string) $row['F']) !== '' ? trim((string) $row['F']) : 'pcs';
-            $priceRaw = isset($row['G']) ? trim((string) $row['G']) : null;
-            $minStockRaw = isset($row['H']) ? trim((string) $row['H']) : '5';
-            $statusRaw = isset($row['I']) ? strtolower(str_replace(' ', '_', trim((string) $row['I']))) : '';
-
-            // Handle header repetitions
-            if ($name === '' || strtolower($name) === 'no' || strtolower($name) === 'name') {
-                $rowIndex++;
-                continue;
-            }
-
-            $quantity = is_numeric($quantityRaw) ? max(0, (int) $quantityRaw) : 0;
-            $minStock = is_numeric($minStockRaw) ? max(0, (int) $minStockRaw) : 5;
-            $price = is_numeric($priceRaw) ? (float) $priceRaw : null;
-
-            $validStatuses = [
-                StockStatus::AVAILABLE->value,
-                StockStatus::LOW_STOCK->value,
-                StockStatus::OUT_OF_STOCK->value,
-            ];
-
-            if (in_array($statusRaw, $validStatuses, true)) {
-                $status = $statusRaw;
-            } else {
-                $status = $quantity === 0
-                    ? StockStatus::OUT_OF_STOCK->value
-                    : ($quantity <= $minStock ? StockStatus::LOW_STOCK->value : StockStatus::AVAILABLE->value);
-            }
-
-            $recordsToInsert[] = [
-                'user_id' => $userId,
-                'name' => substr($name, 0, 255),
-                'sku' => $sku === '-' ? null : ($sku ? substr($sku, 0, 100) : null),
-                'description' => $description === '-' ? null : $description,
-                'quantity' => $quantity,
-                'unit' => $unit === '-' ? 'pcs' : substr($unit, 0, 50),
-                'price' => $price,
-                'min_stock' => $minStock,
-                'status' => $status,
-                'cover_image_path' => null,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-
-            $imported++;
-            $rowIndex++;
+        try {
+            $reader = new XlsxReader;
+            $reader->setReadDataOnly(true);
+            $rows = $reader->load($path)->getActiveSheet()->toArray(null, false, false, false);
+        } catch (SpreadsheetException) {
+            throw new InvalidArgumentException('File Excel tidak valid atau tidak dapat dibaca.');
         }
 
-        if (!empty($recordsToInsert)) {
-            $this->stockRepository->insertMany($recordsToInsert);
+        $header = array_map(
+            fn ($h) => match ($h = strtolower(trim((string) $h))) {
+                'qty' => 'quantity',
+                default => $h,
+            },
+            array_shift($rows) ?? []
+        );
+        $index = array_flip($header);
+
+        if (! isset($index['name'])) {
+            throw new InvalidArgumentException('Kolom "name" tidak ditemukan pada baris header.');
+        }
+
+        $valid = [];
+        $skipped = 0;
+
+        foreach (array_slice($rows, 0, self::MAX_ROWS) as $row) {
+            $cell = fn (string $column) => isset($index[$column]) ? $this->clean($row[$index[$column]] ?? null) : null;
+
+            $data = [
+                'name' => $cell('name'),
+                'sku' => $cell('sku'),
+                'description' => $cell('description'),
+                'quantity' => $cell('quantity') ?? 0,
+                'unit' => $cell('unit') ?? 'pcs',
+                'price' => $cell('price'),
+                'min_stock' => $cell('min_stock') ?? 5,
+            ];
+
+            if (Validator::make($data, StockService::rules())->fails()) {
+                $skipped++;
+
+                continue;
+            }
+
+            $valid[] = $data;
         }
 
         return [
-            'imported' => $imported,
-            'errors' => $errors,
+            'imported' => $this->stocks->createMany($user, $valid),
+            'skipped' => $skipped,
         ];
+    }
+
+    private function clean(mixed $value): mixed
+    {
+        if (is_string($value)) {
+            $value = trim($value);
+        }
+
+        return $value === '' ? null : $value;
     }
 }

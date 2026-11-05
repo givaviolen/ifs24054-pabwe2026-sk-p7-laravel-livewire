@@ -2,183 +2,114 @@
 
 namespace App\Features\Stock\Livewire;
 
-use App\Features\Stock\Enums\StockStatus;
 use App\Features\Stock\Models\Stock;
 use App\Features\Stock\Services\StockService;
-use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
+use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
+#[Layout('components.layouts.app')]
+#[Title('Detail Stok')]
 class StockDetail extends Component
 {
     use WithFileUploads;
 
+    #[Locked]
     public Stock $stock;
-    public string $name = '';
-    public ?string $sku = null;
-    public ?string $description = '';
-    public int $quantity = 0;
-    public string $unit = 'pcs';
-    public ?float $price = null;
-    public int $minStock = 5;
-    public string $status = 'available';
 
-    public mixed $coverPhoto = null;
-    public bool $showEditModal = false;
-    public bool $confirmingStockDeletion = false;
-    public bool $confirmingCoverDeletion = false;
+    public bool $editing = false;
+
+    public $name = '';
+
+    public $sku = '';
+
+    public $description = '';
+
+    public $quantity = 0;
+
+    public $unit = 'pcs';
+
+    public $price = null;
+
+    public $min_stock = 5;
+
+    public $adjustStep = 1;
+
+    public $coverFile = null;
 
     public function mount(Stock $stock): void
     {
-        Gate::authorize('view', $stock);
-
+        $this->authorize('view', $stock);
         $this->stock = $stock;
-        $this->name = $stock->name;
-        $this->sku = $stock->sku;
-        $this->description = $stock->description ?? '';
-        $this->quantity = $stock->quantity;
-        $this->unit = $stock->unit ?? 'pcs';
-        $this->price = $stock->price !== null ? (float) $stock->price : null;
-        $this->minStock = $stock->min_stock;
-        $this->status = $stock->status;
     }
 
-    public function openEditModal(): void
+    public function edit(): void
     {
-        Gate::authorize('update', $this->stock);
+        $this->authorize('update', $this->stock);
 
         $this->name = $this->stock->name;
         $this->sku = $this->stock->sku;
-        $this->description = $this->stock->description ?? '';
+        $this->description = $this->stock->description;
         $this->quantity = $this->stock->quantity;
-        $this->unit = $this->stock->unit ?? 'pcs';
-        $this->price = $this->stock->price !== null ? (float) $this->stock->price : null;
-        $this->minStock = $this->stock->min_stock;
-        $this->status = $this->stock->status;
-        $this->showEditModal = true;
+        $this->unit = $this->stock->unit;
+        $this->price = $this->stock->price;
+        $this->min_stock = $this->stock->min_stock;
+        $this->resetErrorBag();
+        $this->editing = true;
     }
 
-    public function closeEditModal(): void
+    public function cancel(): void
     {
-        $this->showEditModal = false;
+        $this->editing = false;
     }
 
-    public function updatedCoverPhoto(StockService $stockService): void
+    public function save(): void
     {
-        Gate::authorize('update', $this->stock);
+        $this->authorize('update', $this->stock);
+        $data = $this->validate(StockService::rules());
 
-        $this->validate([
-            'coverPhoto' => ['required', 'image', 'max:5120'], // max 5MB
+        $this->service()->update($this->stock, $data);
+        $this->editing = false;
+        session()->flash('status', 'Stok berhasil diperbarui.');
+    }
+
+    /** $direction: 1 = tambah, -1 = kurangi; besar langkah dari $adjustStep. */
+    public function adjust(int $direction): void
+    {
+        $this->authorize('update', $this->stock);
+
+        $step = max(1, (int) $this->adjustStep);
+        $this->service()->adjustQuantity($this->stock, $direction < 0 ? -$step : $step);
+    }
+
+    public function updatedCoverFile(): void
+    {
+        $this->authorize('update', $this->stock);
+        $this->validateOnly('coverFile', [
+            'coverFile' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
 
-        $stockService->updateCoverPhoto($this->stock, $this->coverPhoto);
-        $this->stock->refresh();
-        $this->reset('coverPhoto');
-
-        session()->flash('success', 'Cover stok berhasil diperbarui.');
+        $this->service()->storeCover($this->stock, $this->coverFile);
+        $this->reset('coverFile');
+        session()->flash('status', 'Cover berhasil diperbarui.');
     }
 
-    public function confirmDeleteCover(): void
+    public function removeCover(): void
     {
-        $this->confirmingCoverDeletion = true;
+        $this->authorize('update', $this->stock);
+        $this->service()->removeCover($this->stock);
+        session()->flash('status', 'Cover dihapus.');
     }
 
-    public function cancelDeleteCover(): void
+    public function render()
     {
-        $this->confirmingCoverDeletion = false;
+        return view('livewire.stock.stock-detail');
     }
 
-    public function deleteCoverPhoto(StockService $stockService): void
+    private function service(): StockService
     {
-        Gate::authorize('update', $this->stock);
-
-        $stockService->deleteCoverPhoto($this->stock);
-        $this->stock->refresh();
-        $this->confirmingCoverDeletion = false;
-
-        session()->flash('success', 'Cover stok berhasil dihapus.');
-    }
-
-    public function saveStock(StockService $stockService): void
-    {
-        Gate::authorize('update', $this->stock);
-
-        $validated = $this->validate([
-            'name' => ['required', 'string', 'min:3', 'max:255'],
-            'sku' => ['nullable', 'string', 'max:100'],
-            'description' => ['nullable', 'string'],
-            'quantity' => ['required', 'integer', 'min:0'],
-            'unit' => ['required', 'string', 'max:50'],
-            'price' => ['nullable', 'numeric', 'min:0'],
-            'minStock' => ['required', 'integer', 'min:0'],
-            'status' => ['required', 'string', Rule::in(['available', 'low_stock', 'out_of_stock'])],
-        ]);
-
-        $stockService->updateStock($this->stock, [
-            'name' => $validated['name'],
-            'sku' => $validated['sku'] ?: null,
-            'description' => $validated['description'] ?: null,
-            'quantity' => $validated['quantity'],
-            'unit' => $validated['unit'],
-            'price' => $validated['price'],
-            'min_stock' => $validated['minStock'],
-            'status' => $validated['status'],
-        ]);
-
-        $this->stock->refresh();
-        $this->name = $this->stock->name;
-        $this->sku = $this->stock->sku;
-        $this->description = $this->stock->description ?? '';
-        $this->quantity = $this->stock->quantity;
-        $this->unit = $this->stock->unit ?? 'pcs';
-        $this->price = $this->stock->price !== null ? (float) $this->stock->price : null;
-        $this->minStock = $this->stock->min_stock;
-        $this->status = $this->stock->status;
-
-        $this->closeEditModal();
-
-        session()->flash('success', 'Informasi stok berhasil disimpan.');
-    }
-
-    public function adjustQuantity(int $adjustment, StockService $stockService): void
-    {
-        Gate::authorize('update', $this->stock);
-
-        $stockService->adjustQuantity($this->stock, $adjustment);
-        $this->stock->refresh();
-        $this->quantity = $this->stock->quantity;
-        $this->status = $this->stock->status;
-
-        session()->flash('success', 'Jumlah stok berhasil diperbarui.');
-    }
-
-    public function confirmDeleteStock(): void
-    {
-        $this->confirmingStockDeletion = true;
-    }
-
-    public function cancelDeleteStock(): void
-    {
-        $this->confirmingStockDeletion = false;
-    }
-
-    public function deleteStock(StockService $stockService): mixed
-    {
-        Gate::authorize('delete', $this->stock);
-
-        $this->confirmingStockDeletion = false;
-        $stockService->deleteStock($this->stock);
-
-        session()->flash('success', 'Stok berhasil dihapus.');
-
-        return redirect()->route('stocks.index');
-    }
-
-    public function render(): mixed
-    {
-        return view('livewire.stock.stock-detail', [
-            'statuses' => StockStatus::cases(),
-        ])->layout('components.layouts.app', ['title' => 'Detail Stok: ' . $this->stock->name]);
+        return app(StockService::class);
     }
 }

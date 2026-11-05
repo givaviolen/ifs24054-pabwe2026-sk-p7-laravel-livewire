@@ -3,66 +3,52 @@
 namespace App\Features\Admin\Livewire;
 
 use App\Features\Admin\Services\AdminUserService;
-use App\Features\Stock\Enums\StockStatus;
-use App\Features\Stock\Services\StockExcelService;
 use App\Models\User;
-use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/** Daftar stok milik satu user — hanya baca (tanpa aksi ubah/hapus). */
 #[Layout('components.layouts.app')]
-#[Title('User Stock (Read Only) - Admin')]
+#[Title('Stok User')]
 class AdminUserStockList extends Component
 {
     use WithPagination;
 
+    #[Locked]
     public User $user;
-    public string $search = '';
-    public string $statusFilter = '';
 
-    protected $queryString = [
-        'search' => ['except' => ''],
-        'statusFilter' => ['except' => ''],
-    ];
+    #[Url(as: 'q')]
+    public string $search = '';
+
+    #[Url(as: 'status')]
+    public string $statusFilter = '';
 
     public function mount(User $user): void
     {
         $this->user = $user;
     }
 
-    public function updatedSearch(): void
+    public function updatingSearch(): void
     {
         $this->resetPage();
     }
 
-    public function updatedStatusFilter(): void
+    public function updatingStatusFilter(): void
     {
         $this->resetPage();
     }
 
-    public function exportExcel(StockExcelService $excelService): StreamedResponse
+    public function render()
     {
-        $stocks = $this->user->stocks()->latest('id')->get();
-        $safeName = preg_replace('/[^A-Za-z0-9_-]/', '_', $this->user->name);
-
-        return $excelService->exportToResponse($stocks, "stocks-{$safeName}-".now()->format('Ymd-His').'.xlsx');
-    }
-
-    public function render(AdminUserService $adminService): View
-    {
-        $stocks = $adminService->getUserStocks(
-            $this->user->id,
-            $this->statusFilter ?: null,
-            $this->search ?: null,
-            10
-        );
+        $service = app(AdminUserService::class);
 
         return view('livewire.admin.admin-user-stock-list', [
-            'stocks' => $stocks,
-            'statuses' => StockStatus::cases(),
+            'stocks' => $service->paginateStocks($this->user, $this->search, $this->statusFilter),
+            'summary' => $service->summary($this->user),
         ]);
     }
 }
