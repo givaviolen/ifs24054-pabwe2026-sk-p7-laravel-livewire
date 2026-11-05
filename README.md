@@ -1,0 +1,1 @@
+# PABWE 2026 - P7 Stock Application\n\nKerangka kerja aplikasi inventaris stok menggunakan Laravel 13 dan Livewire 4 dengan arsitektur Feature-First.\n
