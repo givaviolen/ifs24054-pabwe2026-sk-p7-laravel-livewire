@@ -12,11 +12,21 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['throttle:1000-per-second'])->group(function () {
-    // Root: guest melihat halaman login langsung (HTTP 200, tanpa redirect).
-    // User yang sudah login diarahkan oleh middleware guest (lihat bootstrap/app.php).
-    Route::get('/', Login::class)
-        ->middleware('guest')
-        ->name('home');
+    // Root: selalu HTTP 200 (tanpa redirect) untuk guest maupun user yang sudah login.
+    // - Guest   -> form login
+    // - Admin   -> daftar user
+    // - Member  -> daftar stok
+    Route::get('/', function () {
+        $user = Auth::user();
+
+        $page = match (true) {
+            $user === null => Login::class,
+            $user->isAdmin() => UserList::class,
+            default => StockList::class,
+        };
+
+        return view('home', ['page' => $page]);
+    })->name('home');
 
     // Guest Authentication Routes
     Route::middleware('guest')->group(function () {

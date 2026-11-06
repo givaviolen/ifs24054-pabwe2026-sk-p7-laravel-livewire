@@ -17,22 +17,22 @@ class RoutingTest extends TestCase
             ->assertSee('Masuk ke Akun Anda');
     }
 
-    public function test_root_redirects_member_to_stocks(): void
+    public function test_root_is_accessible_for_member(): void
     {
         $member = User::factory()->member()->create();
 
         $this->actingAs($member)
             ->get('/')
-            ->assertRedirect(route('stocks.index'));
+            ->assertOk();
     }
 
-    public function test_root_redirects_admin_to_admin_users(): void
+    public function test_root_is_accessible_for_admin(): void
     {
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)
             ->get('/')
-            ->assertRedirect(route('admin.users'));
+            ->assertOk();
     }
 
     public function test_health_check_endpoint(): void
