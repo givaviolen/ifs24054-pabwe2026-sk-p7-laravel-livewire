@@ -10,7 +10,7 @@
     ],
     "env": {
         "APP_ENV": "production",
-        "APP_DEBUG": "true",
+        "APP_DEBUG": "false",
         "APP_CONFIG_CACHE": "/tmp/config.cache.php",
         "APP_EVENTS_CACHE": "/tmp/events.cache.php",
         "APP_PACKAGES_CACHE": "/tmp/packages.cache.php",
@@ -19,6 +19,9 @@
         "VIEW_COMPILED_PATH": "/tmp/storage/framework/views",
         "CACHE_STORE": "array",
         "SESSION_DRIVER": "cookie",
+        "DB_CONNECTION": "mysql",
+        "QUEUE_CONNECTION": "sync",
+        "FILESYSTEM_DISK": "local",
         "LOG_CHANNEL": "stderr"
     }
 }
