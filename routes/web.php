@@ -28,6 +28,32 @@ Route::middleware(['throttle:1000-per-second'])->group(function () {
         return view('home', ['page' => $page]);
     })->name('home');
 
+    // Static assets fallbacks to prevent 404 in console
+    Route::get('/favicon.svg', function () {
+        return response()->file(public_path('favicon.svg'), [
+            'Content-Type' => 'image/svg+xml',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    });
+
+    Route::get('/favicon.ico', function () {
+        $path = public_path('favicon.ico');
+        if (file_exists($path) && filesize($path) > 0) {
+            return response()->file($path, [
+                'Content-Type' => 'image/x-icon',
+                'Cache-Control' => 'public, max-age=86400',
+            ]);
+        }
+        return response()->file(public_path('favicon.svg'), [
+            'Content-Type' => 'image/svg+xml',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    });
+
+    Route::get('/robots.txt', function () {
+        return response("User-agent: *\nDisallow:", 200, ['Content-Type' => 'text/plain']);
+    });
+
     // Guest Authentication Routes
     Route::middleware('guest')->group(function () {
         Route::get('/login', Login::class)->name('login');

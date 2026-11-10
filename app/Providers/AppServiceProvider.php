@@ -37,8 +37,11 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::policy(Stock::class, StockPolicy::class);
 
-        // Script Livewire di-defer agar tidak memblokir render pertama.
-        \Livewire\Livewire::useScriptTagAttributes(['defer' => 'defer']);
+        // Script Livewire dimuat sebagai ES module dan di-defer agar modern dan non-blocking.
+        \Livewire\Livewire::useScriptTagAttributes([
+            'defer' => 'defer',
+            'type' => 'module',
+        ]);
 
         RateLimiter::for('1000-per-second', function (Request $request) {
             return Limit::perSecond(1000)->by($request->user()?->id ?: $request->ip());

@@ -6,8 +6,9 @@
     <title>{{ $title ?? 'Stock Inventory Application' }} - PABWE 2026</title>
     <meta name="description" content="Aplikasi inventaris stok barang berbasis web untuk mengelola persediaan barang secara efisien, akurat, dan terstruktur.">
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
+    <link rel="alternate icon" href="{{ asset('favicon.ico') }}">
     @if (file_exists(public_path('build/manifest.json')))
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @vite(['resources/css/app.css'])
     @else
         <script src="https://cdn.tailwindcss.com" defer></script>
     @endif
