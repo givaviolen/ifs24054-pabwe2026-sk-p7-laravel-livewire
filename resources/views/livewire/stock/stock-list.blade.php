@@ -31,7 +31,7 @@
                 x-transition:leave-start="opacity-100 scale-100"
                 x-transition:leave-end="opacity-0 scale-95"
                 class="absolute right-0 z-30 mt-2 w-56 origin-top-right rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl shadow-slate-200/70">
-                <div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Aksi Cepat</div>
+                <div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">Aksi Cepat</div>
 
                 <button type="button" :disabled="!!loading"
                     @click="
@@ -60,7 +60,7 @@
                 </button>
 
                 <div class="my-1.5 border-t border-slate-100"></div>
-                <div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Spreadsheet</div>
+                <div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">Spreadsheet</div>
 
                 <button type="button" :disabled="!!loading"
                     @click="
@@ -94,7 +94,7 @@
     <!-- Filter & Search Controls -->
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col sm:flex-row gap-4 items-center justify-between">
         <div class="w-full sm:w-72 relative">
-            <input wire:model.live.debounce.300ms="search" type="text" placeholder="Cari nama, SKU, deskripsi..."
+            <input wire:model.live.debounce.300ms="search" type="text" aria-label="Cari nama, SKU, deskripsi..." placeholder="Cari nama, SKU, deskripsi..."
                 class="w-full pl-3.5 pr-9 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <div wire:loading wire:target="search,statusFilter" class="absolute right-3 top-2.5">
                 <svg class="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
@@ -202,7 +202,7 @@
                                 x-transition:leave-start="opacity-100 scale-100"
                                 x-transition:leave-end="opacity-0 scale-95"
                                 class="absolute right-0 z-20 mt-1.5 w-48 origin-top-right rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl shadow-slate-200/70">
-                                <div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Tindakan</div>
+                                <div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">Tindakan</div>
 
                                 <a href="{{ route('stocks.show', $stock->id) }}" @click="open = false"
                                     class="flex w-full items-center gap-2.5 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 transition">
@@ -291,7 +291,7 @@
                     <h3 class="text-lg font-bold text-slate-900">
                         {{ $editingStockId ? 'Edit Data Stok' : 'Tambah Stok Baru' }}
                     </h3>
-                    <button wire:click="closeFormModal" class="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                    <button wire:click="closeFormModal" aria-label="Tutup modal form" class="p-1 text-slate-500 hover:text-slate-700 rounded-lg">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
@@ -299,43 +299,43 @@
                 <form wire:submit.prevent="saveStock" class="space-y-4 mt-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Nama Barang *</label>
-                            <input wire:model="formName" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Contoh: Laptop Asus ROG">
+                            <label for="formName" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Nama Barang *</label>
+                            <input wire:model="formName" id="formName" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Contoh: Laptop Asus ROG">
                             @error('formName') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">SKU</label>
-                            <input wire:model="formSku" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Contoh: LAP-ROG-001">
+                            <label for="formSku" class="block text-xs font-semibold uppercase text-slate-600 mb-1">SKU</label>
+                            <input wire:model="formSku" id="formSku" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Contoh: LAP-ROG-001">
                             @error('formSku') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                         </div>
                     </div>
 
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Quantity *</label>
-                            <input wire:model="formQuantity" type="number" min="0" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <label for="formQuantity" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Quantity *</label>
+                            <input wire:model="formQuantity" id="formQuantity" type="number" min="0" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             @error('formQuantity') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Unit *</label>
-                            <input wire:model="formUnit" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="pcs / unit">
+                            <label for="formUnit" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Unit *</label>
+                            <input wire:model="formUnit" id="formUnit" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="pcs / unit">
                             @error('formUnit') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Min. Stok *</label>
-                            <input wire:model="formMinStock" type="number" min="0" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <label for="formMinStock" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Min. Stok *</label>
+                            <input wire:model="formMinStock" id="formMinStock" type="number" min="0" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             @error('formMinStock') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Harga Satuan</label>
-                            <input wire:model="formPrice" type="number" step="0.01" min="0" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Rp">
+                            <label for="formPrice" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Harga Satuan</label>
+                            <input wire:model="formPrice" id="formPrice" type="number" step="0.01" min="0" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Rp">
                             @error('formPrice') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                         </div>
                     </div>
 
                     <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Status *</label>
-                        <select wire:model="formStatus" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                        <label for="formStatus" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Status *</label>
+                        <select wire:model="formStatus" id="formStatus" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                             @foreach ($statuses as $status)
                                 <option value="{{ $status->value }}">{{ $status->label() }}</option>
                             @endforeach
@@ -381,15 +381,15 @@
             <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 border border-slate-200">
                 <div class="flex items-center justify-between pb-4 border-b border-slate-100">
                     <h3 class="text-lg font-bold text-slate-900">Import Data Stok Excel</h3>
-                    <button wire:click="closeImportModal" class="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                    <button wire:click="closeImportModal" aria-label="Tutup modal import" class="p-1 text-slate-500 hover:text-slate-700 rounded-lg">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
 
                 <form wire:submit.prevent="importExcel" class="space-y-4 mt-4">
                     <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">File Spreadsheet (.xlsx, .xls, .csv)</label>
-                        <input wire:model="importFile" type="file" accept=".xlsx,.xls,.csv" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        <label for="importFile" class="block text-xs font-semibold uppercase text-slate-600 mb-1">File Spreadsheet (.xlsx, .xls, .csv)</label>
+                        <input wire:model="importFile" id="importFile" type="file" accept=".xlsx,.xls,.csv" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                         @error('importFile') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                     </div>
 
@@ -420,22 +420,22 @@
                         </span>
                         <h3 class="text-lg font-bold text-slate-900">Generate Item Stok AI</h3>
                     </div>
-                    <button wire:click="closeAiModal" class="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                    <button wire:click="closeAiModal" aria-label="Tutup modal AI" class="p-1 text-slate-500 hover:text-slate-700 rounded-lg">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
 
                 <div class="space-y-4 mt-4">
                     <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Instruksi / Prompt Inventaris</label>
-                        <textarea wire:model="aiPrompt" rows="3" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Contoh: Buatkan 3 item stok untuk toko komputer/laptop beserta SKU, unit, dan perkiraan harga."></textarea>
+                        <label for="aiPrompt" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Instruksi / Prompt Inventaris</label>
+                        <textarea wire:model="aiPrompt" id="aiPrompt" rows="3" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Contoh: Buatkan 3 item stok untuk toko komputer/laptop beserta SKU, unit, dan perkiraan harga."></textarea>
                         @error('aiPrompt') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                     </div>
 
                     <div class="flex items-center space-x-4">
                         <div class="w-32">
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Jumlah Item</label>
-                            <input wire:model="aiCount" type="number" min="1" max="10" class="w-full px-3 py-1.5 text-sm rounded-lg border border-slate-300">
+                            <label for="aiCount" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Jumlah Item</label>
+                            <input wire:model="aiCount" id="aiCount" type="number" min="1" max="10" class="w-full px-3 py-1.5 text-sm rounded-lg border border-slate-300">
                         </div>
                         <div class="pt-5">
                             <button wire:click="generateWithAi" wire:loading.attr="disabled" class="px-4 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-75 rounded-lg shadow-sm transition">

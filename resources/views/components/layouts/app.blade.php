@@ -4,8 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ $title ?? 'Stock Inventory Application' }} - PABWE 2026</title>
+    <meta name="description" content="Aplikasi inventaris stok barang berbasis web untuk mengelola persediaan barang secara efisien, akurat, dan terstruktur.">
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
-    <script src="https://cdn.tailwindcss.com"></script>
+    @if (file_exists(public_path('build/manifest.json')))
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @else
+        <script src="https://cdn.tailwindcss.com" defer></script>
+    @endif
     <style>
         [x-cloak] { display: none !important; }
         html:has(.modal-scroll-lock),
@@ -44,7 +49,7 @@
                     </span>
                     <span class="text-slate-900 tracking-tight">Stock <span class="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent font-extrabold">Pro</span></span>
                 </a>
-                <button @click="sidebarOpen = false" class="md:hidden text-slate-400 hover:text-slate-600">
+                <button @click="sidebarOpen = false" aria-label="Tutup menu sidebar" class="md:hidden text-slate-500 hover:text-slate-700">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
@@ -55,17 +60,17 @@
                     @if (auth()->user()->profile_photo_path && \Illuminate\Support\Facades\Storage::disk('public')->exists(auth()->user()->profile_photo_path))
                         <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url(auth()->user()->profile_photo_path) }}" alt="{{ auth()->user()->name }}" class="w-10 h-10 rounded-full object-cover shadow-sm flex-shrink-0 border border-slate-200">
                     @else
-                        <div class="w-10 h-10 rounded-full {{ auth()->user()->isAdmin() ? 'bg-purple-600 text-purple-100' : 'bg-blue-600 text-blue-100' }} flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">
+                        <div class="w-10 h-10 rounded-full {{ auth()->user()->isAdmin() ? 'bg-purple-700 text-white' : 'bg-blue-700 text-white' }} flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0">
                             {{ strtoupper(substr(auth()->user()->name, 0, 2)) }}
                         </div>
                     @endif
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-semibold text-slate-900 truncate">{{ auth()->user()->name }}</p>
-                        <p class="text-xs text-slate-500 font-mono truncate">&#64;{{ auth()->user()->username }}</p>
+                        <p class="text-xs text-slate-600 font-mono truncate">&#64;{{ auth()->user()->username }}</p>
                     </div>
                 </div>
                 <div class="mt-2.5 pt-2 border-t border-slate-200 flex items-center justify-between">
-                    <span class="text-xs text-slate-500">Peran Akun:</span>
+                    <span class="text-xs text-slate-600">Peran Akun:</span>
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold {{ auth()->user()->isAdmin() ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200' }}">
                         {{ ucfirst(auth()->user()->role) }}
                     </span>
@@ -74,14 +79,14 @@
 
             <!-- Navigation Links -->
             <div class="flex-1 px-3 space-y-1 overflow-y-auto">
-                <div class="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <div class="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-600">
                     Menu Utama
                 </div>
 
                 @if(auth()->user()->isAdmin())
                     <a href="{{ route('admin.users') }}" 
                        class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('admin.*') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' }}">
-                        <svg class="w-5 h-5 {{ request()->routeIs('admin.*') ? 'text-blue-600' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-5 h-5 {{ request()->routeIs('admin.*') ? 'text-blue-600' : 'text-slate-500' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
                         <span>User Management</span>
@@ -90,7 +95,7 @@
 
                 <a href="{{ route('stocks.index') }}" 
                    class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('stocks.*') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' }}">
-                    <svg class="w-5 h-5 {{ request()->routeIs('stocks.*') ? 'text-blue-600' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 {{ request()->routeIs('stocks.*') ? 'text-blue-600' : 'text-slate-500' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
                     <span>Daftar Stok</span>
@@ -98,7 +103,7 @@
 
                 <a href="{{ route('profile') }}" 
                    class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('profile') ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' }}">
-                    <svg class="w-5 h-5 {{ request()->routeIs('profile') ? 'text-blue-600' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-5 h-5 {{ request()->routeIs('profile') ? 'text-blue-600' : 'text-slate-500' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                     <span>Profil Saya</span>
@@ -123,7 +128,7 @@
         <div class="md:pl-64 flex flex-col min-h-screen">
             <!-- Top Mobile Bar -->
             <header class="md:hidden h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sticky top-0 z-30">
-                <button @click="sidebarOpen = true" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100">
+                <button @click="sidebarOpen = true" aria-label="Buka menu navigasi" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                 </button>
                 <div class="flex items-center space-x-2">

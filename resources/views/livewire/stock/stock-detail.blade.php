@@ -64,7 +64,7 @@
 
     <!-- Cover Image Section -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-8">
-        <input type="file" wire:model="coverPhoto" id="coverPhotoInput" accept="image/*" class="hidden">
+        <input type="file" wire:model="coverPhoto" id="coverPhotoInput" aria-label="Upload Cover Foto" accept="image/*" class="hidden">
 
         @if ($stock->cover_image_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($stock->cover_image_path))
             <div class="relative group h-64 sm:h-80 w-full bg-slate-900 overflow-hidden">
@@ -190,7 +190,7 @@
             <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6 my-8 border border-slate-200">
                 <div class="flex items-center justify-between pb-4 border-b border-slate-100">
                     <h3 class="text-lg font-bold text-slate-900">Edit Data Stok</h3>
-                    <button wire:click="closeEditModal" class="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                    <button wire:click="closeEditModal" aria-label="Tutup modal edit" class="p-1 text-slate-500 hover:text-slate-700 rounded-lg">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
@@ -198,43 +198,43 @@
                 <form wire:submit.prevent="saveStock" class="space-y-4 mt-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Nama Barang *</label>
-                            <input wire:model="name" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <label for="detailName" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Nama Barang *</label>
+                            <input wire:model="name" id="detailName" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             @error('name') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">SKU</label>
-                            <input wire:model="sku" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <label for="detailSku" class="block text-xs font-semibold uppercase text-slate-600 mb-1">SKU</label>
+                            <input wire:model="sku" id="detailSku" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             @error('sku') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                         </div>
                     </div>
 
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Quantity *</label>
-                            <input wire:model="quantity" type="number" min="0" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <label for="detailQuantity" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Quantity *</label>
+                            <input wire:model="quantity" id="detailQuantity" type="number" min="0" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             @error('quantity') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Unit *</label>
-                            <input wire:model="unit" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <label for="detailUnit" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Unit *</label>
+                            <input wire:model="unit" id="detailUnit" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             @error('unit') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Min. Stok *</label>
-                            <input wire:model="minStock" type="number" min="0" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <label for="detailMinStock" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Min. Stok *</label>
+                            <input wire:model="minStock" id="detailMinStock" type="number" min="0" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             @error('minStock') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Harga Satuan</label>
-                            <input wire:model="price" type="number" step="0.01" min="0" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <label for="detailPrice" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Harga Satuan</label>
+                            <input wire:model="price" id="detailPrice" type="number" step="0.01" min="0" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             @error('price') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
                         </div>
                     </div>
 
                     <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Status *</label>
-                        <select wire:model="status" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                        <label for="detailStatus" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Status *</label>
+                        <select wire:model="status" id="detailStatus" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                             @foreach ($statuses as $st)
                                 <option value="{{ $st->value }}">{{ $st->label() }}</option>
                             @endforeach
