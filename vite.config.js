@@ -10,6 +10,14 @@ export default defineConfig({
         }),
         tailwindcss(),
     ],
+    build: {
+        // Browser modern saja: tanpa transpile ke sintaks lama.
+        target: 'esnext',
+        // Hapus polyfill modulepreload (kode "legacy" kecil di bundel).
+        modulePreload: {
+            polyfill: false,
+        },
+    },
     server: {
         watch: {
             ignored: ['**/storage/framework/views/**'],
