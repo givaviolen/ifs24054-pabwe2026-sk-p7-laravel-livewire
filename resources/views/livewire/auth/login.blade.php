@@ -8,13 +8,13 @@
         <form wire:submit.prevent="authenticate" class="space-y-5">
             <div>
                 <label for="login-username" class="block text-sm font-medium text-slate-700 mb-1">Username atau Email</label>
-                <input wire:model="login" type="text" id="login-username" class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition" placeholder="username atau nama@email.com" required>
+                <input wire:model="login" type="text" name="username" id="login-username" autocomplete="username" class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition" placeholder="username atau nama@email.com" required>
                 @error('login') <span class="text-xs text-rose-600 mt-1 block">{{ $message }}</span> @enderror
             </div>
 
             <div>
                 <label for="login-password" class="block text-sm font-medium text-slate-700 mb-1">Password</label>
-                <input wire:model="password" type="password" id="login-password" class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition" placeholder="••••••••" required>
+                <input wire:model="password" type="password" name="password" id="login-password" autocomplete="current-password" class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition" placeholder="••••••••" required>
                 @error('password') <span class="text-xs text-rose-600 mt-1 block">{{ $message }}</span> @enderror
             </div>
 

@@ -1,8 +1,4 @@
 <div>
-    <!-- Toast UI Editor CDN Styles & Scripts -->
-    <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css" />
-    <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
-
     <!-- Top Action Bar -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>
@@ -266,22 +262,20 @@
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 overflow-y-auto modal-scroll-lock"
             x-data="{
                 editor: null,
-                init() {
-                    this.$nextTick(() => {
-                        const container = this.$refs.editorContainer;
-                        if (container && typeof toastui !== 'undefined') {
-                            this.editor = new toastui.Editor({
-                                el: container,
-                                height: '220px',
-                                initialEditType: 'markdown',
-                                previewStyle: 'tab',
-                                initialValue: $wire.formDescription || '',
-                                events: {
-                                    change: () => {
-                                        $wire.set('formDescription', this.editor.getMarkdown(), false);
-                                    }
-                                }
-                            });
+                async init() {
+                    await window.loadToastUI();
+                    const container = this.$refs.editorContainer;
+                    if (!container) return;
+                    this.editor = new toastui.Editor({
+                        el: container,
+                        height: '220px',
+                        initialEditType: 'markdown',
+                        previewStyle: 'tab',
+                        initialValue: $wire.formDescription || '',
+                        events: {
+                            change: () => {
+                                $wire.set('formDescription', this.editor.getMarkdown(), false);
+                            }
                         }
                     });
                 }

@@ -6,10 +6,24 @@
     <title>{{ $title ?? 'Stock Inventory Application' }} - PABWE 2026</title>
     <meta name="description" content="Aplikasi inventaris stok barang berbasis web untuk mengelola persediaan barang secara efisien, akurat, dan terstruktur.">
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
-    @if (file_exists(public_path('build/manifest.json')))
-        @vite(['resources/css/app.css'])
+    @php
+        // Inline CSS hasil build Vite agar tidak render-blocking.
+        $inlineCss = null;
+        $manifestPath = public_path('build/manifest.json');
+        if (! is_file(public_path('hot')) && is_file($manifestPath)) {
+            $manifest = json_decode((string) file_get_contents($manifestPath), true);
+            $cssFile = $manifest['resources/css/app.css']['file'] ?? null;
+            $cssPath = $cssFile ? public_path('build/'.$cssFile) : null;
+            if ($cssPath && is_file($cssPath)) {
+                $inlineCss = file_get_contents($cssPath);
+            }
+        }
+    @endphp
+    @if ($inlineCss)
+        <style>{!! $inlineCss !!}</style>
+        @vite(['resources/js/app.js'])
     @else
-        <script src="https://cdn.tailwindcss.com" defer></script>
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
     @endif
     <style>
         [x-cloak] { display: none !important; }
@@ -210,6 +224,6 @@
         </div>
     @endauth
 
-    @livewireScripts
+    @livewireScriptConfig
 </body>
 </html>

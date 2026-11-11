@@ -1,8 +1,11 @@
+// Livewire 4 + Alpine dibundel lewat Vite (module = deferred, tidak memblokir render).
+// Layout memakai @livewireScriptConfig sehingga Livewire tidak menyuntik livewire.min.js lagi.
 import { Livewire, Alpine } from '../../vendor/livewire/livewire/dist/livewire.esm';
 
 window.Alpine = Alpine;
 Livewire.start();
 
+// Muat pustaka pihak ketiga hanya saat dibutuhkan (tidak memblokir render halaman).
 const cache = {};
 const once = (key, make) => {
     if (!cache[key]) {

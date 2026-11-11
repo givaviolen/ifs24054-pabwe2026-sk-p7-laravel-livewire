@@ -1,7 +1,4 @@
 <div>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
-
     <div class="mb-8">
         <h1 class="text-2xl font-bold text-slate-900">Pengaturan Profil</h1>
         <p class="text-sm text-slate-500 mt-1">Kelola identitas diri, foto profil 1:1, dan keamanan akun Anda</p>
@@ -141,7 +138,8 @@
              wire:ignore.self
              x-data="{
                 cropper: null,
-                initCropper() {
+                async initCropper() {
+                    await window.loadCropper();
                     const img = document.getElementById('imageToCrop');
                     if (!img) return;
                     if (this.cropper) {
